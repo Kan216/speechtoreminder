@@ -19,6 +19,7 @@ import {
   PlusCircle,
   FileText,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
@@ -40,9 +41,10 @@ interface MainSidebarProps {
   user: User;
   notes: Note[];
   notesLoading: boolean;
+  notesError: string | null;
 }
 
-export default function MainSidebar({ user, notes, notesLoading }: MainSidebarProps) {
+export default function MainSidebar({ user, notes, notesLoading, notesError }: MainSidebarProps) {
   const router = useRouter();
   const params = useParams();
   const noteId = params.noteId as string;
@@ -116,6 +118,14 @@ export default function MainSidebar({ user, notes, notesLoading }: MainSidebarPr
                 <SidebarMenuSkeleton showIcon />
                 <SidebarMenuSkeleton showIcon />
               </>
+            ) : notesError ? (
+                <div className="p-4 text-xs text-destructive-foreground bg-destructive/80 rounded-md m-2 space-y-2">
+                    <div className='flex items-center gap-2 font-bold'>
+                        <AlertTriangle className='h-4 w-4' />
+                        <p>Permission Error</p>
+                    </div>
+                    <p>Could not load notes. Please update your Firestore security rules to allow listing notes.</p>
+                </div>
             ) : (
                 notes.map((note) => (
                 <SidebarMenuItem key={note.id}>

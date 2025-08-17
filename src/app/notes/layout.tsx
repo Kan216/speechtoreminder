@@ -27,6 +27,7 @@ export default function NotesLayout({
   const { user, loading } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesLoading, setNotesLoading] = useState(true);
+  const [notesError, setNotesError] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -46,6 +47,12 @@ export default function NotesLayout({
         ...doc.data(),
       })) as Note[];
       setNotes(notesData);
+      setNotesLoading(false);
+      setNotesError(null);
+    },
+    (error) => {
+      console.error("Error fetching notes:", error);
+      setNotesError(error.message);
       setNotesLoading(false);
     });
 
@@ -67,7 +74,7 @@ export default function NotesLayout({
   return (
     <SidebarProvider>
       <Sidebar>
-        <MainSidebar user={user} notes={notes} notesLoading={notesLoading} />
+        <MainSidebar user={user} notes={notes} notesLoading={notesLoading} notesError={notesError}/>
       </Sidebar>
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
