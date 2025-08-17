@@ -14,41 +14,57 @@ const ScheduleEventInputSchema = z.object({
 });
 type ScheduleEventInput = z.infer<typeof ScheduleEventInputSchema>;
 
-async function getTokens(userId: string): Promise<{ accessToken: string; refreshToken?: string }> {
-  const tokenDocRef = doc(db, 'users', userId, 'private', 'google');
-  const tokenDoc = await getDoc(tokenDocRef);
-  if (!tokenDoc.exists()) {
-    throw new Error('User has not granted Google Calendar permissions.');
-  }
-  const data = tokenDoc.data();
-  if (!data.accessToken) {
-     throw new Error('Access token not found for user.');
-  }
-  return { accessToken: data.accessToken, refreshToken: data.refreshToken };
+async function getOauth2Client(userId: string) {
+    const tokenDocRef = doc(db, 'users', userId, 'private', 'google');
+    const tokenDoc = await getDoc(tokenDocRef);
+
+    if (!tokenDoc.exists()) {
+        throw new Error('User has not granted Google Calendar permissions. Please sign in again.');
+    }
+
+    const tokens = tokenDoc.data();
+    if (!tokens.accessToken || !tokens.refreshToken) {
+        throw new Error('Access or Refresh token not found. Please sign in again to grant permissions.');
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+        // These can be left undefined as we are not using them for server-to-server flow here
+        undefined, 
+        undefined,
+        // The redirect URL is also not needed for refreshing tokens
+        undefined 
+    );
+    
+    oauth2Client.setCredentials({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+    });
+    
+    // The googleapis library automatically handles token refreshing
+    // if the refresh_token is provided.
+
+    return oauth2Client;
 }
+
 
 export async function createOrUpdateCalendarEvent(input: ScheduleEventInput): Promise<string> {
     const { userId, title, startTime, eventId } = ScheduleEventInputSchema.parse(input);
     
-    const { accessToken, refreshToken } = await getTokens(userId);
-    
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ 
-        access_token: accessToken,
-        refresh_token: refreshToken
-    });
-
+    const oauth2Client = await getOauth2Client(userId);
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     
+    // Default to a 1-hour event duration
+    const eventEndTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString();
+
     const event = {
       summary: title,
       start: {
         dateTime: startTime,
-        timeZone: 'America/Los_Angeles', // Consider making this dynamic in a future version
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, // Use user's local timezone
       },
       end: {
-        dateTime: new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(), // Default to 1-hour duration
-        timeZone: 'America/Los_Angeles',
+        dateTime: eventEndTime,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     };
 
@@ -70,21 +86,22 @@ export async function createOrUpdateCalendarEvent(input: ScheduleEventInput): Pr
             return res.data.id!;
         }
     } catch (error: any) {
-        console.error('Error interacting with Google Calendar:', error);
+        console.error('Error interacting with Google Calendar:', error.message);
+        
+        let friendlyMessage = `Failed to create or update calendar event: ${error.message}`;
 
         if (error.code === 401) {
-             throw new Error("Google API access token is expired or invalid. Please sign in again.");
+            friendlyMessage = "Your Google credentials have expired. Please sign out and sign back in to reconnect your calendar.";
+        } else if (error.code === 403) {
+             if (error.message?.includes('forbidden')) {
+                 friendlyMessage = "The Google Calendar API is not enabled for your project. Please enable it in the Google Cloud Console.";
+            } else {
+                friendlyMessage = "You don't have permission to access this calendar. Please check your Google Calendar sharing settings.";
+            }
+        } else if (error.code === 404) {
+            friendlyMessage = "The calendar or event was not found. It may have been deleted.";
         }
         
-        if (error.code === 403) {
-            if (error.message?.includes('usageLimits')) {
-                 throw new Error("Google Calendar API usage limit exceeded. Please try again later.");
-            }
-            if (error.message?.includes('forbidden')) {
-                 throw new Error("The Google Calendar API is not enabled for your project. Please enable it in the Google Cloud Console.");
-            }
-        }
-        
-        throw new Error(`Failed to create or update calendar event: ${error.message}`);
+        throw new Error(friendlyMessage);
     }
 }

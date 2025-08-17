@@ -9,7 +9,6 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   getAdditionalUserInfo,
-  OAuthCredential,
 } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -68,6 +67,7 @@ export function AuthForm() {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
+    // Important: prompt and access_type are key for getting a refresh token.
     provider.setCustomParameters({
       access_type: 'offline',
       prompt: 'consent' 
@@ -77,24 +77,26 @@ export function AuthForm() {
       const result = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const user = result.user;
-
+      
       if (credential && user) {
+        // This is a special property that comes back with the user object on first sign in
+        // when using prompt: 'consent' and offline access. It's not available in all
+        // environments but is the most reliable way to get the refresh token.
+        const userWithRefreshToken = user as any;
+        const refreshToken = userWithRefreshToken.refreshToken;
+
+        if (!refreshToken) {
+           console.warn("Refresh token not found. Calendar sync might not work long-term. Please try re-authenticating.");
+        }
+        
         try {
             const userDocRef = doc(db, 'users', user.uid, 'private', 'google');
             const tokenData: { accessToken: string; refreshToken?: string } = {
                 accessToken: credential.accessToken!
             };
 
-            // This is the correct way to get the refresh token with the v9 SDK
-            // The refresh token is often part of the user object itself on the first sign-in
-            if (user.refreshToken) {
-                tokenData.refreshToken = user.refreshToken;
-            } else {
-                 const additionalUserInfo = getAdditionalUserInfo(result);
-                 // Fallback for some environments
-                 if (additionalUserInfo?.profile?.refresh_token) {
-                    tokenData.refreshToken = additionalUserInfo.profile.refresh_token;
-                 }
+            if (refreshToken) {
+                tokenData.refreshToken = refreshToken;
             }
           
             await setDoc(userDocRef, tokenData, { merge: true });
@@ -103,7 +105,7 @@ export function AuthForm() {
             if (error.code === 'permission-denied') {
                 toast({
                     title: 'Firestore Permission Denied',
-                    description: "Please update your security rules to allow writing to the 'private' collection for your user.",
+                    description: "Please check your security rules to allow writing to the 'private' collection for your user.",
                     variant: 'destructive',
                 });
             } else {
@@ -121,15 +123,15 @@ export function AuthForm() {
       router.push('/notes');
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user') {
-        // This is not a "real" error, user just closed the popup.
-        // We can safely ignore it and don't need to show a scary error message.
-        return;
+        // User just closed the popup, this is not an error to display.
+        // We can safely ignore it.
+      } else {
+        toast({
+          title: 'Error with Google Sign-In',
+          description: error.message,
+          variant: 'destructive',
+        });
       }
-      toast({
-        title: 'Error with Google Sign-In',
-        description: error.message,
-        variant: 'destructive',
-      });
     } finally {
       setIsSubmitting(false);
     }
