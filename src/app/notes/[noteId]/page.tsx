@@ -53,7 +53,7 @@ export default function NotePage() {
     });
 
     return () => unsubscribe();
-  }, [user, authLoading, noteId]);
+  }, [user, authLoading, params.noteId]);
 
   const handleDateTimeSubmit = async (selectedDate: Date | undefined) => {
     if (!note || !user || !selectedDate) {

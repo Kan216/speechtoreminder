@@ -85,8 +85,8 @@ export async function createOrUpdateCalendarEvent(input: ScheduleEventInput): Pr
             const googleError = error.response.data.error;
             if (googleError.code === 403 && googleError.message.includes('API not enabled')) {
                 friendlyMessage = "The Google Calendar API is not enabled for this project. Please enable it in the Google Cloud Console.";
-            } else if (googleError.code === 401) {
-                friendlyMessage = "Your Google authentication has expired. Please sign out and sign back in to reconnect your calendar.";
+            } else if (googleError.code === 401 || (googleError.code === 400 && googleError.message === 'invalid_grant') ) {
+                friendlyMessage = "Your Google authentication has expired or is invalid. Please sign out and sign back in to reconnect your calendar.";
             } else {
                 friendlyMessage = `Google Calendar Error: ${googleError.message}`;
             }
