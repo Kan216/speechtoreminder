@@ -34,31 +34,31 @@ export async function syncToNotion(input: SyncToNotionInput): Promise<SyncToNoti
 }
 
 /**
- * Extracts a Notion Database ID from a full Notion URL.
+ * Extracts and sanitizes a Notion Database ID from a potential URL or raw ID string.
  * @param urlOrId The potential URL or the raw ID.
- * @returns The extracted Database ID.
+ * @returns The extracted and cleaned Database ID.
  */
 function extractNotionDatabaseId(urlOrId: string): string {
-    if (!urlOrId.startsWith('https://')) {
-        return urlOrId; // It's likely already an ID
-    }
-    try {
-        const url = new URL(urlOrId);
-        const pathParts = url.pathname.split('/');
-        // The ID is usually the last part of the path, before the query string.
-        const id = pathParts.pop()?.split('-').pop();
-        if (id && id.length === 32) {
-             // A more specific regex to find the 32-character ID in the pathname
-            const match = url.pathname.match(/([a-f0-9]{32})/);
-            if (match) {
-                return match[1];
+    let id = urlOrId;
+    // If it's a URL, try to parse it
+    if (id.startsWith('https://')) {
+        try {
+            const url = new URL(id);
+            const pathParts = url.pathname.split('/');
+            // The ID is often the last part, before any query params
+            id = pathParts[pathParts.length - 1] || '';
+            // It might also be in the format '.../path-with-id-123456?v=...'
+            const idMatch = id.match(/([a-f0-9]{32})/);
+             if (idMatch) {
+                return idMatch[1];
             }
+        } catch (e) {
+            // Not a valid URL, proceed assuming it's an ID
         }
-        return id || urlOrId; // Fallback to the parsed segment or original string
-    } catch (e) {
-        // Not a valid URL, so treat it as an ID.
-        return urlOrId;
     }
+    // Notion database IDs are 32 characters long, but can be entered with hyphens.
+    // We remove them to get the canonical format.
+    return id.replace(/-/g, '');
 }
 
 
