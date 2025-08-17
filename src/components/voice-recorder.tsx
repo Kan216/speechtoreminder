@@ -4,7 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Mic, StopCircle, Loader2 } from 'lucide-react';
 import { transcribeVoiceNote } from '@/ai/flows/transcribe-voice-note';
-import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
+import { db } from '@/lib/firebase/client';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -13,7 +15,7 @@ export default function VoiceRecorder() {
     const [isTranscribing, setIsTranscribing] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-    const supabase = createClient();
+    const { user } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
 
@@ -63,27 +65,21 @@ export default function VoiceRecorder() {
             
             try {
                 const { transcription } = await transcribeVoiceNote({ audioDataUri: base64Audio });
-                const { data: { user } } = await supabase.auth.getUser();
 
                 if (user) {
-                    const { data: newNote, error } = await supabase
-                        .from('notes')
-                        .insert({
-                            title: transcription.substring(0, 40) + (transcription.length > 40 ? '...' : ''),
-                            content: transcription,
-                            user_id: user.id
-                        })
-                        .select('id')
-                        .single();
-
-                    if (error) throw error;
+                    const newNoteRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
+                        title: transcription.substring(0, 40) + (transcription.length > 40 ? '...' : ''),
+                        content: transcription,
+                        formatted_content: null,
+                        user_id: user.id,
+                        created_at: serverTimestamp()
+                    });
 
                     toast({
                         title: 'Transcription Complete!',
                         description: 'Your new note has been created.',
                     });
-                    router.push(`/notes/${newNote.id}`);
-                    router.refresh();
+                    router.push(`/notes/${newNoteRef.id}`);
                 }
             } catch (error) {
                 console.error('Transcription failed:', error);
@@ -108,21 +104,15 @@ export default function VoiceRecorder() {
 
     return (
         <div>
-            {!isRecording ? (
-                <Button onClick={startRecording} disabled={isTranscribing} size="lg" className="rounded-full w-24 h-24 shadow-lg transition-all hover:scale-105 active:scale-95">
-                    {isTranscribing ? (
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                    ) : (
-                        <Mic className="h-8 w-8" />
-                    )}
-                </Button>
-            ) : (
-                <Button onClick={stopRecording} variant="destructive" size="lg" className="rounded-full w-24 h-24 shadow-lg animate-pulse">
-                    <StopCircle className="h-8 w-8" />
-                </Button>
-            )}
+            <Button onClick={startRecording} disabled={isTranscribing || !user} size="lg" className="rounded-full w-24 h-24 shadow-lg transition-all hover:scale-105 active:scale-95">
+                {isTranscribing ? (
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                ) : (
+                    <Mic className="h-8 w-8" />
+                )}
+            </Button>
             <p className="mt-4 text-sm text-muted-foreground">
-                {isRecording ? "Recording... Click to stop." : isTranscribing ? "Transcribing..." : "Tap to record"}
+                {isRecording ? "Recording... Click to stop." : isTranscribing ? "Transcribing..." : user ? "Tap to record" : "Sign in to record"}
             </p>
         </div>
     );

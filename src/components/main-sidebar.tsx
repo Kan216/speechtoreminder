@@ -9,6 +9,7 @@ import {
   SidebarSeparator,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -19,8 +20,10 @@ import {
   FileText,
   Loader2,
 } from 'lucide-react';
-import type { User } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase/client';
+import type { User } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase/client';
+import { signOut } from 'firebase/auth';
+import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useRouter, useParams } from 'next/navigation';
 import { Input } from './ui/input';
 import Link from 'next/link';
@@ -30,45 +33,45 @@ import { useToast } from '@/hooks/use-toast';
 type Note = {
   id: string;
   title: string | null;
-  created_at: string;
+  created_at: Timestamp;
 };
 
 interface MainSidebarProps {
   user: User;
   notes: Note[];
+  notesLoading: boolean;
 }
 
-export default function MainSidebar({ user, notes }: MainSidebarProps) {
+export default function MainSidebar({ user, notes, notesLoading }: MainSidebarProps) {
   const router = useRouter();
   const params = useParams();
-  const supabase = createClient();
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut(auth);
     router.push('/auth');
-    router.refresh();
   };
   
   const handleNewNote = async () => {
     setIsCreating(true);
-    const { data, error } = await supabase
-      .from('notes')
-      .insert({ title: 'Untitled Note', content: '', user_id: user.id })
-      .select('id')
-      .single();
-
-    setIsCreating(false);
-    if (data) {
-      router.push(`/notes/${data.id}`);
-      router.refresh(); // This will re-fetch notes in the layout
-    } else {
+    try {
+        const docRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
+            title: 'Untitled Note',
+            content: '',
+            formatted_content: null,
+            created_at: serverTimestamp(),
+            user_id: user.uid
+        });
+        router.push(`/notes/${docRef.id}`);
+    } catch (error: any) {
         toast({
             title: "Error creating note",
             description: error.message,
             variant: "destructive"
         })
+    } finally {
+        setIsCreating(false);
     }
   };
 
@@ -77,12 +80,12 @@ export default function MainSidebar({ user, notes }: MainSidebarProps) {
       <SidebarHeader>
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.user_metadata.avatar_url} />
+            <AvatarImage src={user.photoURL ?? undefined} />
             <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col overflow-hidden">
             <span className="text-sm font-semibold text-sidebar-foreground truncate">
-              {user.user_metadata.full_name ?? user.email}
+              {user.displayName ?? user.email}
             </span>
           </div>
         </div>
@@ -106,16 +109,24 @@ export default function MainSidebar({ user, notes }: MainSidebarProps) {
         <SidebarGroup className='p-0'>
           <SidebarGroupLabel>Notes</SidebarGroupLabel>
           <SidebarMenu>
-            {notes.map((note) => (
-              <SidebarMenuItem key={note.id}>
-                <Button asChild variant="ghost" className="w-full justify-start" data-active={params.noteId === note.id}>
-                    <Link href={`/notes/${note.id}`}>
-                        <FileText className="mr-2 h-4 w-4" />
-                        <span className="truncate">{note.title || 'Untitled Note'}</span>
-                    </Link>
-                </Button>
-              </SidebarMenuItem>
-            ))}
+            {notesLoading ? (
+              <>
+                <SidebarMenuSkeleton showIcon />
+                <SidebarMenuSkeleton showIcon />
+                <SidebarMenuSkeleton showIcon />
+              </>
+            ) : (
+                notes.map((note) => (
+                <SidebarMenuItem key={note.id}>
+                    <Button asChild variant="ghost" className="w-full justify-start" data-active={params.noteId === note.id}>
+                        <Link href={`/notes/${note.id}`}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            <span className="truncate">{note.title || 'Untitled Note'}</span>
+                        </Link>
+                    </Button>
+                </SidebarMenuItem>
+                ))
+            )}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

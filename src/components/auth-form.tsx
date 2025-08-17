@@ -1,68 +1,79 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { auth } from '@/lib/firebase/client'
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword,
+  GithubAuthProvider,
+  signInWithPopup
+} from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Github, Loader2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+
 
 export function AuthForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const supabase = createClient()
   const { toast } = useToast()
+  const router = useRouter()
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    if (error) {
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+      router.push('/notes')
+    } catch (error: any) {
       toast({
         title: 'Error signing in',
         description: error.message,
         variant: 'destructive',
       })
+    } finally {
+      setIsSubmitting(false)
     }
-    // No redirect needed, middleware will handle it on page reload
-    setIsSubmitting(false)
   }
 
   const handleSignUp = async () => {
     setIsSubmitting(true)
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-    if (error) {
+    try {
+      await createUserWithEmailAndPassword(auth, email, password)
+       toast({
+        title: 'Success!',
+        description: 'You have signed up successfully. Please sign in.',
+      })
+    } catch (error: any) {
       toast({
         title: 'Error signing up',
         description: error.message,
         variant: 'destructive',
       })
-    } else {
-      toast({
-        title: 'Success!',
-        description: 'You have signed up successfully.',
-      })
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsSubmitting(false)
   }
   
   const handleGithubSignIn = async () => {
     setIsSubmitting(true)
-    await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: {
-        redirectTo: `${location.origin}/auth/callback`,
-      },
-    })
-    setIsSubmitting(false)
+    const provider = new GithubAuthProvider();
+    try {
+      await signInWithPopup(auth, provider)
+      router.push('/notes')
+    } catch (error: any) {
+       toast({
+        title: 'Error with GitHub sign in',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -89,6 +100,7 @@ export function AuthForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             disabled={isSubmitting}
+            minLength={6}
           />
         </div>
         <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">

@@ -1,24 +1,63 @@
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase/client';
+import { useAuth } from '@/hooks/use-auth';
+import { redirect, notFound } from 'next/navigation';
 import NoteEditor from '@/components/note-editor';
-import { notFound } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
-export default async function NotePage({ params }: { params: { noteId: string } }) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+type Note = {
+  id: string;
+  title: string;
+  content: string;
+  formatted_content: string | null;
+  created_at: Timestamp;
+};
 
-  if (!user) {
-    redirect('/auth');
+export default function NotePage({ params }: { params: { noteId: string } }) {
+  const { user, loading: authLoading } = useAuth();
+  const [note, setNote] = useState<Note | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      redirect('/auth');
+      return;
+    }
+
+    const fetchNote = async () => {
+      try {
+        const noteRef = doc(db, 'users', user.uid, 'notes', params.noteId);
+        const noteSnap = await getDoc(noteRef);
+
+        if (noteSnap.exists()) {
+          setNote({ id: noteSnap.id, ...noteSnap.data() } as Note);
+        } else {
+          notFound();
+        }
+      } catch (error) {
+        console.error('Error fetching note:', error);
+        notFound();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNote();
+  }, [user, authLoading, params.noteId]);
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
-  const { data: note, error } = await supabase
-    .from('notes')
-    .select('id, title, content, formatted_content, created_at')
-    .eq('id', params.noteId)
-    .eq('user_id', user.id)
-    .single();
-
-  if (error || !note) {
+  if (!note) {
     return notFound();
   }
 

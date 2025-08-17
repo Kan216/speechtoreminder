@@ -4,18 +4,20 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { createClient } from '@/lib/supabase/client';
+import { db } from '@/lib/firebase/client';
+import { doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { formatNote } from '@/ai/flows/format-note';
 import { Wand2, Loader2, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 
 type Note = {
   id: string;
-  title: string | null;
-  content: string | null;
+  title: string;
+  content: string;
   formatted_content: string | null;
-  created_at: string;
+  created_at: Timestamp;
 };
 
 interface NoteEditorProps {
@@ -38,23 +40,28 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const supabase = createClient();
   const { toast } = useToast();
   const router = useRouter();
+  const { user } = useAuth();
 
+  const getNoteRef = useCallback(() => {
+    if (!user) return null;
+    return doc(db, 'users', user.uid, 'notes', note.id);
+  }, [user, note.id]);
+  
   const saveNote = useCallback(async (updatedNote: Partial<Note>) => {
-    setIsSaving(true);
-    const { error } = await supabase
-      .from('notes')
-      .update(updatedNote)
-      .eq('id', note.id);
+    const noteRef = getNoteRef();
+    if (!noteRef) return;
 
-    if (error) {
-      toast({ title: 'Error saving note', description: error.message, variant: 'destructive' });
+    setIsSaving(true);
+    try {
+        await updateDoc(noteRef, updatedNote);
+    } catch(error: any) {
+        toast({ title: 'Error saving note', description: error.message, variant: 'destructive' });
+    } finally {
+        setIsSaving(false);
     }
-    setIsSaving(false);
-    router.refresh();
-  }, [note.id, supabase, toast, router]);
+  }, [getNoteRef, toast]);
   
   const debouncedSave = useMemo(() => debounce(saveNote, 1000), [saveNote]);
 
@@ -93,17 +100,21 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
   };
 
   const handleDeleteNote = async () => {
+    const noteRef = getNoteRef();
+    if (!noteRef) return;
+    
     setIsDeleting(true);
-    const { error } = await supabase.from('notes').delete().eq('id', note.id);
-    if (error) {
+    try {
+        await deleteDoc(noteRef);
+        toast({ title: 'Note deleted' });
+        router.push('/notes');
+    } catch(error: any) {
       toast({ title: 'Error deleting note', description: error.message, variant: 'destructive' });
       setIsDeleting(false);
-    } else {
-      toast({ title: 'Note deleted' });
-      router.push('/notes');
-      router.refresh();
     }
   }
+
+  const creationDate = note.created_at?.toDate ? note.created_at.toDate() : new Date();
 
   return (
     <div className="flex h-full flex-col p-4 md:p-6 lg:p-8 space-y-4 bg-background">
@@ -139,7 +150,7 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
         )}
       </div>
       <p className="text-xs text-muted-foreground text-center">
-        Created on {new Date(note.created_at).toLocaleDateString()}
+        Created on {creationDate.toLocaleDateString()}
       </p>
     </div>
   );
