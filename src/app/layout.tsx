@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/hooks/use-auth';
 import { Plus_Jakarta_Sans } from 'next/font/google';
+import Script from 'next/script';
 
 const font = Plus_Jakarta_Sans({ subsets: ['latin'] });
 
@@ -23,6 +24,7 @@ export default function RootLayout({
             {children}
         </AuthProvider>
         <Toaster />
+        <Script src="https://apis.google.com/js/api.js" async defer />
       </body>
     </html>
   );

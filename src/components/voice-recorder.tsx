@@ -102,7 +102,7 @@ export default function VoiceRecorder() {
             const base64Audio = reader.result as string;
             
             try {
-                const { taskTitle, subtasks, dueDate, calendarEventId } = await createTaskFromVoice({ 
+                const { taskTitle, subtasks, dueDate } = await createTaskFromVoice({ 
                     audioDataUri: base64Audio,
                     userId: user.uid,
                 });
@@ -122,12 +122,12 @@ export default function VoiceRecorder() {
                     user_id: user.uid,
                     created_at: serverTimestamp(),
                     dueDate: dueDate || null,
-                    calendarEventId: calendarEventId || null,
+                    calendarEventId: null,
                 });
 
                 toast({
                     title: 'Task Created!',
-                    description: `Your new task has been created. ${calendarEventId ? 'It has also been added to your calendar.' : ''}`,
+                    description: `Your new task "${taskTitle}" has been created.`,
                 });
                 router.push(`/notes/${newNoteRef.id}`);
                 
@@ -146,17 +146,13 @@ export default function VoiceRecorder() {
     };
 
     const handleCancel = () => {
-        stopRecording();
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+        }
         setIsDialogOpen(false);
     }
     
-    // Add uuid package for subtask IDs
     useEffect(() => {
-        const script = document.createElement('script');
-        script.src = "https://cdn.jsdelivr.net/npm/uuid@8.3.2/dist/umd/uuidv4.min.js";
-        script.async = true;
-        document.body.appendChild(script);
-
         return () => {
             if (mediaRecorderRef.current && mediaRecorderRef.current.stream) {
                 mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());

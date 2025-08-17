@@ -6,7 +6,7 @@
  *
  * - createTaskFromVoice - A function that transcribes audio and structures it into a task.
  * - CreateTaskFromVoiceInput - The input type for the function.
- * - CreateTaskFromVoiceOutput - The return type for the function.
+ * - CreateTaskFrom-VoiceOutput - The return type for the function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -16,7 +16,7 @@ const CreateTaskFromVoiceInputSchema = z.object({
   audioDataUri: z
     .string()
     .describe(
-      'A recording of the user, as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'
+      "A recording of the user, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
    userId: z.string().describe("The user's unique ID.")
 });

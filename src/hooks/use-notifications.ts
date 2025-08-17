@@ -59,6 +59,7 @@ export function useNotifications(notes: Note[]) {
   }, [permission, notes]);
 
   useEffect(() => {
+    // This effect will run once on mount to show a toast if notifications are denied.
     if (permission === 'denied') {
         toast({
             title: "Notifications Blocked",
@@ -68,4 +69,3 @@ export function useNotifications(notes: Note[]) {
     }
   }, [permission, toast])
 }
-

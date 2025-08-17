@@ -58,6 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 displayName: user.displayName,
                 email: user.email,
                 photoURL: user.photoURL,
+                lastLogin: serverTimestamp()
             };
             if (!docSnap.exists()) {
                 await setDoc(userRef, {

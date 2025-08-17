@@ -19,6 +19,8 @@ import { DateTimePickerDialog } from './datetime-picker-dialog';
 
 interface NoteEditorProps {
   note: Note;
+  onDateTimeSubmit: (date?: Date) => void;
+  isSyncing: boolean;
 }
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
@@ -32,7 +34,7 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
     });
 };
 
-export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
+export default function NoteEditor({ note: initialNote, onDateTimeSubmit, isSyncing }: NoteEditorProps) {
   const [note, setNote] = useState(initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -120,19 +122,7 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
 
   const handleDateTimeSubmit = async (date?: Date) => {
     setIsDateTimePickerOpen(false);
-    if (!date) {
-        // Allow unsetting the date
-        const updatedNote = { ...note, dueDate: undefined };
-        setNote(updatedNote);
-        await saveNote({ dueDate: undefined });
-        toast({ title: 'Task unscheduled.' });
-        return;
-    };
-    const dueDate = date.toISOString();
-    const updatedNote = { ...note, dueDate };
-    setNote(updatedNote);
-    await saveNote({ dueDate });
-    toast({ title: 'Task scheduled!', description: `You'll be notified on ${format(date, "PPP p")}` });
+    onDateTimeSubmit(date);
   }
 
   return (
@@ -154,8 +144,8 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
           />
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
-            {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" size="sm" onClick={() => setIsDateTimePickerOpen(true)}>
+            {(isSaving || isSyncing) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            <Button variant="outline" size="sm" onClick={() => setIsDateTimePickerOpen(true)} disabled={isSyncing}>
                 <CalendarClock className="mr-2 h-4 w-4" />
                 {note.dueDate ? 'Reschedule' : 'Schedule'}
             </Button>
@@ -246,4 +236,3 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
     </>
   );
 }
-
