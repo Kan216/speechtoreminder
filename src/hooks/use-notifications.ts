@@ -34,15 +34,15 @@ export function useNotifications(notes: Note[]) {
           const dueDate = new Date(note.dueDate);
           const timeDiff = dueDate.getTime() - now.getTime();
           
-          if (timeDiff > 0 && timeDiff <= 60000) {
+          if (timeDiff > 0 && timeDiff <= 60000) { // 1 minute window
             const notification = new Notification('Upcoming Task Reminder', {
               body: `Your task "${note.title}" is due now.`,
-              icon: '/logo.png',
+              icon: '/logo.png', // Make sure you have a logo.png in your /public folder
               data: { url: `/notes/${note.id}` },
             });
 
             notification.onclick = (event) => {
-              event.preventDefault(); // prevent the browser from focusing the Notification's tab
+              event.preventDefault(); 
               const targetUrl = (event.target as Notification).data.url;
               window.open(targetUrl, '_blank');
             };
@@ -53,7 +53,7 @@ export function useNotifications(notes: Note[]) {
       });
     };
 
-    const intervalId = setInterval(checkNotifications, 30000);
+    const intervalId = setInterval(checkNotifications, 30000); // Check every 30 seconds
 
     return () => clearInterval(intervalId);
   }, [permission, notes]);

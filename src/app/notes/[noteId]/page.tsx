@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect, notFound, useParams, useRouter } from 'next/navigation';
@@ -10,14 +10,15 @@ import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
 import { Note } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { syncToNotion } from '@/ai/flows/sync-to-notion';
+import { DateTimePickerDialog } from '@/components/datetime-picker-dialog';
 
 
 export default function NotePage() {
   const { user, loading: authLoading } = useAuth();
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isDateTimePickerOpen, setIsDateTimePickerOpen] = useState(false);
+
   const params = useParams();
   const router = useRouter();
   const noteId = params.noteId as string;
@@ -62,59 +63,34 @@ export default function NotePage() {
     return () => unsubscribe();
   }, [user, authLoading, noteId, getNoteRef]);
 
-  const handleNotionSync = async () => {
-    if (!note || !user) return;
+  const handleSchedule = () => {
+    setIsDateTimePickerOpen(true);
+  }
 
-    setIsSyncing(true);
+  const handleDateTimeSubmit = async (date?: Date) => {
+    setIsDateTimePickerOpen(false);
+    if (!date || !note) return;
+
+    const noteRef = getNoteRef();
+    if (!noteRef) return;
+
     try {
-        // Step 1: Fetch credentials from the client
-        const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
-        const userData = userDoc.data();
-        const notionApiKey = userData?.notionApiKey;
-        const notionDatabaseId = userData?.notionDatabaseId;
-
-        if (!notionApiKey || !notionDatabaseId) {
-            toast({
-                title: 'Notion Not Configured',
-                description: 'Please configure your Notion API Key and Database ID in the Settings page before syncing.',
-                variant: 'destructive',
-                duration: 10000,
-            });
-            router.push('/settings');
-            setIsSyncing(false);
-            return;
-        }
-
-        // Step 2: Pass credentials to the flow
-        const result = await syncToNotion({
-            title: note.title,
-            subtasks: note.subtasks.map(st => ({ text: st.text, completed: st.completed })),
-            notionApiKey,
-            notionDatabaseId,
+        await updateDoc(noteRef, {
+            dueDate: date.toISOString(),
         });
-
-        if (result.success) {
-            toast({
-            title: 'Synced to Notion!',
-            description: `Page created successfully.`,
-            });
-        } else {
-            throw new Error(result.error || 'An unknown error occurred during sync.');
-        }
+        toast({
+            title: 'Task Scheduled',
+            description: `Reminder set for ${date.toLocaleString()}.`,
+        });
     } catch (error: any) {
-      console.error('Notion Sync Error:', error);
-      toast({
-        title: 'Notion Sync Error',
-        description: error.message,
-        variant: 'destructive',
-        duration: 10000,
-      });
-    } finally {
-      setIsSyncing(false);
+        toast({
+            title: 'Error Scheduling Task',
+            description: error.message,
+            variant: 'destructive',
+        });
     }
   };
-  
+
   if (authLoading || loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -136,10 +112,17 @@ export default function NotePage() {
   }
 
   return (
-    <NoteEditor 
-        note={note} 
-        onNotionSync={handleNotionSync}
-        isSyncing={isSyncing}
-    />
+    <>
+        <NoteEditor 
+            note={note} 
+            onSchedule={handleSchedule}
+        />
+        <DateTimePickerDialog 
+            isOpen={isDateTimePickerOpen}
+            onOpenChange={setIsDateTimePickerOpen}
+            initialDate={note.dueDate ? new Date(note.dueDate) : new Date()}
+            onSubmit={handleDateTimeSubmit}
+        />
+    </>
   );
 }

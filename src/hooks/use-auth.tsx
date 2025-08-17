@@ -19,6 +19,7 @@ export interface Note {
   subtasks: Subtask[];
   progress: number;
   status: 'pending' | 'inprogress' | 'finished';
+  dueDate?: string;
 }
 
 type AuthContextType = {
