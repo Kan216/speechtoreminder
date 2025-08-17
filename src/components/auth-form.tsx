@@ -38,9 +38,6 @@ export function AuthForm() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/callback`,
-      },
     })
     if (error) {
       toast({
@@ -50,8 +47,8 @@ export function AuthForm() {
       })
     } else {
       toast({
-        title: 'Check your email',
-        description: 'A confirmation link has been sent to your email address.',
+        title: 'Success!',
+        description: 'You have signed up successfully.',
       })
     }
     setIsSubmitting(false)
