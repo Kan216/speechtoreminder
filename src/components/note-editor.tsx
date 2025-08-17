@@ -14,6 +14,7 @@ import { Note } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { useGoogleApi } from '@/hooks/use-google-api';
 
 interface NoteEditorProps {
   note: Note;
@@ -35,9 +36,11 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
   const [note, setNote] = useState(initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useAuth();
+  const { isApiLoaded, signIn, createEvent } = useGoogleApi();
 
   useEffect(() => {
     setNote(initialNote);
@@ -125,36 +128,62 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
       });
       return;
     }
+    
+    if (!isApiLoaded) {
+      toast({ title: 'Google API is not ready yet. Please try again in a moment.' });
+      return;
+    }
 
-    const { createEvent } = await import('ics');
+    setIsSyncing(true);
 
-    const dueDate = new Date(note.dueDate);
-    const event = {
-      title: note.title,
-      description: note.subtasks?.map(s => `- ${s.text}`).join('\n') || 'No subtasks.',
-      start: [dueDate.getUTCFullYear(), dueDate.getUTCMonth() + 1, dueDate.getUTCDate(), dueDate.getUTCHours(), dueDate.getUTCMinutes()] as [number, number, number, number, number],
-      duration: { hours: 1 },
-    };
+    try {
+      await signIn();
+      
+      const dueDate = new Date(note.dueDate);
+      const event = {
+        'summary': note.title,
+        'description': note.subtasks?.map(s => `- ${s.text}`).join('\n') || 'No subtasks.',
+        'start': {
+          'dateTime': dueDate.toISOString(),
+          'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        'end': {
+          'dateTime': new Date(dueDate.getTime() + 60 * 60 * 1000).toISOString(), // 1 hour duration
+          'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      };
 
-    createEvent(event, (error, value) => {
-      if (error) {
-        console.error('Error creating .ics file:', error);
-        toast({
-          title: 'Error creating calendar event',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return;
+      await createEvent(event);
+
+      toast({
+        title: 'Event Created!',
+        description: 'The task has been added to your Google Calendar.',
+      });
+
+    } catch (error: any) {
+      console.error('Full Google Calendar API Error:', JSON.stringify(error, null, 2));
+      let friendlyMessage = "An unexpected error occurred while syncing with Google Calendar.";
+      // Extract user-friendly message from Google's complex error object
+      if (error && error.result && error.result.error) {
+          friendlyMessage = `Google Calendar Error: ${error.result.error.message}`;
+          if (error.result.error.details) {
+              const details = error.result.error.details[0];
+              friendlyMessage += ` Reason: ${details.reason}`;
+          }
+      } else if (error && error.details) {
+          friendlyMessage = `Error: ${error.details}`;
+      } else if (error && error.message) {
+        friendlyMessage = error.message;
       }
-
-      const blob = new Blob([value], { type: 'text/calendar;charset=utf-8' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `${note.title.replace(/ /g,"_")}.ics`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    });
+      
+      toast({
+          title: 'Google Calendar Sync Failed',
+          description: friendlyMessage,
+          variant: 'destructive',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -178,9 +207,9 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
                 Schedule
             </Button>
             {note.dueDate && (
-              <Button variant="outline" size="sm" onClick={handleAddToCalendar}>
-                  <CalendarCheck />
-                  Add to Calendar
+              <Button variant="outline" size="sm" onClick={handleAddToCalendar} disabled={!isApiLoaded || isSyncing}>
+                  {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck />}
+                  Add to Google Calendar
               </Button>
             )}
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
