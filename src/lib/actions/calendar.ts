@@ -1,3 +1,4 @@
+
 'use server';
 
 import { google } from 'googleapis';
@@ -66,13 +67,21 @@ export async function createOrUpdateCalendarEvent(input: ScheduleEventInput): Pr
             return res.data.id!;
         }
     } catch (error: any) {
-        // Check for token expiration
-        if (error.code === 401) {
-            // Here you would implement token refresh logic.
-            // For now, we'll just throw a more specific error.
-            throw new Error("Google API access token is expired or invalid. Please sign in again.");
-        }
         console.error('Error interacting with Google Calendar:', error);
-        throw new Error('Failed to create or update calendar event.');
+
+        if (error.code === 401) {
+             throw new Error("Google API access token is expired or invalid. Please sign in again.");
+        }
+        
+        if (error.code === 403) {
+            if (error.message?.includes('usageLimits')) {
+                 throw new Error("Google Calendar API usage limit exceeded. Please try again later.");
+            }
+            if (error.message?.includes('forbidden')) {
+                 throw new Error("The Google Calendar API is not enabled for your project. Please enable it in the Google Cloud Console.");
+            }
+        }
+        
+        throw new Error(`Failed to create or update calendar event: ${error.message}`);
     }
 }
