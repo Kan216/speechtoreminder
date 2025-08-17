@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
-import { collection, query, orderBy, onSnapshot, Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export interface Subtask {
   id: string;
@@ -58,7 +59,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     email: user.email,
                     photoURL: user.photoURL,
                     createdAt: serverTimestamp()
-                }, { merge: true });
+                }, { merge: true }).catch(error => {
+                     if (error.code === 'permission-denied') {
+                        console.error("Firestore Error: Do not have permission to create user profile. Please check security rules.", error);
+                        setNotesError("Permission Error: Could not create your user profile. Please update Firestore security rules.");
+                     }
+                });
             }
         });
 
