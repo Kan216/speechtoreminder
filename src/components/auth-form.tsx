@@ -4,17 +4,14 @@ import { useState } from 'react'
 import { auth } from '@/lib/firebase/client'
 import { 
   createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
-  GithubAuthProvider,
-  signInWithPopup
+  signInWithEmailAndPassword
 } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { Github, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-
 
 export function AuthForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -58,23 +55,6 @@ export function AuthForm() {
       setIsSubmitting(false)
     }
   }
-  
-  const handleGithubSignIn = async () => {
-    setIsSubmitting(true)
-    const provider = new GithubAuthProvider();
-    try {
-      await signInWithPopup(auth, provider)
-      router.push('/notes')
-    } catch (error: any) {
-       toast({
-        title: 'Error with GitHub sign in',
-        description: error.message,
-        variant: 'destructive',
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -109,28 +89,11 @@ export function AuthForm() {
             Sign In
           </Button>
           <Button type="button" variant="secondary" onClick={handleSignUp} className="w-full" disabled={isSubmitting}>
+             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign Up
           </Button>
         </div>
       </form>
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">
-            Or continue with
-          </span>
-        </div>
-      </div>
-      <Button variant="outline" className="w-full" onClick={handleGithubSignIn} disabled={isSubmitting}>
-        {isSubmitting ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Github className="mr-2 h-4 w-4" />
-        )}
-        GitHub
-      </Button>
     </div>
   )
 }
