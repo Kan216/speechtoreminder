@@ -141,7 +141,7 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
       
       const plainNote = {
         ...note,
-        created_at: note.created_at.toDate().toISOString(),
+        created_at: (note.created_at as any).toDate ? (note.created_at as any).toDate().toISOString() : note.created_at,
       };
 
       const response = await fetch('/api/notion-sync', {
