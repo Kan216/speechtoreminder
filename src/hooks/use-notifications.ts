@@ -37,7 +37,7 @@ export function useNotifications(notes: Note[]) {
           if (timeDiff > 0 && timeDiff <= 60000) { // 1 minute window
             const notification = new Notification('Upcoming Task Reminder', {
               body: `Your task "${note.title}" is due now.`,
-              icon: '/logo.png', // Make sure you have a logo.png in your /public folder
+              icon: '/logo.png',
               data: { url: `/notes/${note.id}` },
             });
 

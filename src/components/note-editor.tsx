@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/client';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, Check, CalendarPlus } from 'lucide-react';
+import { Loader2, Trash2, Check, CalendarPlus, CalendarCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Note } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { createEvent } from 'ics';
 
 interface NoteEditorProps {
   note: Note;
@@ -116,6 +117,45 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
     toast({ title: 'Task Finished!', description: 'Great job!'});
   }
 
+  const handleAddToCalendar = () => {
+    if (!note.dueDate) {
+      toast({
+        title: 'Task not scheduled',
+        description: 'Please schedule the task first to add it to your calendar.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const dueDate = new Date(note.dueDate);
+    const event = {
+      title: note.title,
+      description: note.subtasks?.map(s => `- ${s.text}`).join('\n') || 'No subtasks.',
+      start: [dueDate.getUTCFullYear(), dueDate.getUTCMonth() + 1, dueDate.getUTCDate(), dueDate.getUTCHours(), dueDate.getUTCMinutes()],
+      duration: { hours: 1 },
+    };
+
+    createEvent(event, (error, value) => {
+      if (error) {
+        console.error('Error creating .ics file:', error);
+        toast({
+          title: 'Error creating calendar event',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const blob = new Blob([value], { type: 'text/calendar;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${note.title.replace(/ /g,"_")}.ics`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  };
+
   return (
     <div className="flex h-full flex-col p-4 md:p-6 lg:p-8 space-y-6 bg-background">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -136,6 +176,12 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
                 <CalendarPlus />
                 Schedule
             </Button>
+            {note.dueDate && (
+              <Button variant="outline" size="sm" onClick={handleAddToCalendar}>
+                  <CalendarCheck />
+                  Add to Calendar
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>

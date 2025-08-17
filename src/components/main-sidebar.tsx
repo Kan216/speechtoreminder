@@ -1,3 +1,4 @@
+
 'use client'
 
 import {
@@ -19,7 +20,6 @@ import {
   FileText,
   Loader2,
   AlertTriangle,
-  Settings,
   Home,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
