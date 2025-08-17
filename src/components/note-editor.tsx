@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/client';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, Check } from 'lucide-react';
+import { Loader2, Trash2, Check, CalendarClock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Note } from '@/hooks/use-auth';
@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
+import { DateTimePickerDialog } from './datetime-picker-dialog';
 
 interface NoteEditorProps {
   note: Note;
@@ -35,6 +36,7 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
   const [note, setNote] = useState(initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDateTimePickerOpen, setIsDateTimePickerOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useAuth();
@@ -116,7 +118,25 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
     toast({ title: 'Task Finished!', description: 'Great job!'});
   }
 
+  const handleDateTimeSubmit = async (date?: Date) => {
+    setIsDateTimePickerOpen(false);
+    if (!date) {
+        // Allow unsetting the date
+        const updatedNote = { ...note, dueDate: undefined };
+        setNote(updatedNote);
+        await saveNote({ dueDate: undefined });
+        toast({ title: 'Task unscheduled.' });
+        return;
+    };
+    const dueDate = date.toISOString();
+    const updatedNote = { ...note, dueDate };
+    setNote(updatedNote);
+    await saveNote({ dueDate });
+    toast({ title: 'Task scheduled!', description: `You'll be notified on ${format(date, "PPP p")}` });
+  }
+
   return (
+    <>
     <div className="flex h-full flex-col p-4 md:p-6 lg:p-8 space-y-6 bg-background">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -135,6 +155,10 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
             {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            <Button variant="outline" size="sm" onClick={() => setIsDateTimePickerOpen(true)}>
+                <CalendarClock className="mr-2 h-4 w-4" />
+                {note.dueDate ? 'Reschedule' : 'Schedule'}
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>
@@ -213,5 +237,13 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
         </div>
       </div>
     </div>
+    <DateTimePickerDialog
+        isOpen={isDateTimePickerOpen}
+        onOpenChange={setIsDateTimePickerOpen}
+        initialDate={note.dueDate ? new Date(note.dueDate) : new Date()}
+        onSubmit={handleDateTimeSubmit}
+    />
+    </>
   );
 }
+
