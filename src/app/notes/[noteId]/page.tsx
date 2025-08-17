@@ -65,6 +65,16 @@ export default function NotePage() {
   
   const initClientAndCreateEvent = useCallback(async (token: string, newDueDate: string) => {
     if (!note || !user) return;
+
+    if (!GOOGLE_API_KEY || !GOOGLE_CLIENT_ID) {
+      toast({
+        title: 'Configuration Error',
+        description: 'Google API Key or Client ID is missing. Please check your .env.local file.',
+        variant: 'destructive',
+      });
+      setIsSyncing(false);
+      return;
+    }
     
     try {
         await new Promise<void>((resolve, reject) => {
@@ -122,7 +132,7 @@ export default function NotePage() {
         });
 
     } catch (error: any) {
-        console.error('Full Google Calendar API Error:', error);
+        console.error('Full Google Calendar API Error:', JSON.stringify(error, null, 2));
         let friendlyMessage = "An unexpected error occurred while syncing with Google Calendar.";
         if (error.result?.error?.message) {
             friendlyMessage = `Google Calendar Error: ${error.result.error.message}`;
