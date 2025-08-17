@@ -3,12 +3,12 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    apiKey: "AIzaSyAyBZ2Lo5sgteZHzmQIs2t4FtuwvzX5e7g",
+    authDomain: "voicenotes-qb2gg.firebaseapp.com",
+    projectId: "voicenotes-qb2gg",
+    storageBucket: "voicenotes-qb2gg.firebasestorage.app",
+    messagingSenderId: "447498844477",
+    appId: "1:447498844477:web:df75e4a8c6c009dce8ed54",
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
