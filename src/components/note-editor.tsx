@@ -7,18 +7,18 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/client';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, Check, CalendarPlus, CalendarCheck } from 'lucide-react';
+import { Loader2, Trash2, Check, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Note } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { useGoogleApi } from '@/hooks/use-google-api';
 
 interface NoteEditorProps {
   note: Note;
-  onSchedule: () => void;
+  onNotionSync: () => void;
+  isSyncing: boolean;
 }
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
@@ -32,15 +32,13 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
     });
 };
 
-export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditorProps) {
+export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing }: NoteEditorProps) {
   const [note, setNote] = useState(initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useAuth();
-  const { isApiLoaded, signIn, createEvent } = useGoogleApi();
 
   useEffect(() => {
     setNote(initialNote);
@@ -119,73 +117,6 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
     toast({ title: 'Task Finished!', description: 'Great job!'});
   }
 
-  const handleAddToCalendar = async () => {
-    if (!note.dueDate) {
-      toast({
-        title: 'Task not scheduled',
-        description: 'Please schedule the task first to add it to your calendar.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    if (!isApiLoaded) {
-      toast({ title: 'Google API is not ready yet. Please try again in a moment.' });
-      return;
-    }
-
-    setIsSyncing(true);
-
-    try {
-      await signIn();
-      
-      const dueDate = new Date(note.dueDate);
-      const event = {
-        'summary': note.title,
-        'description': note.subtasks?.map(s => `- ${s.text}`).join('\n') || 'No subtasks.',
-        'start': {
-          'dateTime': dueDate.toISOString(),
-          'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        'end': {
-          'dateTime': new Date(dueDate.getTime() + 60 * 60 * 1000).toISOString(), // 1 hour duration
-          'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      };
-
-      await createEvent(event);
-
-      toast({
-        title: 'Event Created!',
-        description: 'The task has been added to your Google Calendar.',
-      });
-
-    } catch (error: any) {
-      console.error('Full Google Calendar API Error:', JSON.stringify(error, null, 2));
-      let friendlyMessage = "An unexpected error occurred while syncing with Google Calendar.";
-      // Extract user-friendly message from Google's complex error object
-      if (error && error.result && error.result.error) {
-          friendlyMessage = `Google Calendar Error: ${error.result.error.message}`;
-          if (error.result.error.details) {
-              const details = error.result.error.details[0];
-              friendlyMessage += ` Reason: ${details.reason}`;
-          }
-      } else if (error && error.details) {
-          friendlyMessage = `Error: ${error.details}`;
-      } else if (error && error.message) {
-        friendlyMessage = error.message;
-      }
-      
-      toast({
-          title: 'Google Calendar Sync Failed',
-          description: friendlyMessage,
-          variant: 'destructive',
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   return (
     <div className="flex h-full flex-col p-4 md:p-6 lg:p-8 space-y-6 bg-background">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -202,16 +133,10 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
             {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" size="sm" onClick={onSchedule}>
-                <CalendarPlus />
-                Schedule
+            <Button variant="outline" size="sm" onClick={onNotionSync} disabled={isSyncing}>
+                {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send />}
+                Sync to Notion
             </Button>
-            {note.dueDate && (
-              <Button variant="outline" size="sm" onClick={handleAddToCalendar} disabled={!isApiLoaded || isSyncing}>
-                  {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck />}
-                  Add to Google Calendar
-              </Button>
-            )}
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>

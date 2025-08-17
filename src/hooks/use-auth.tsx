@@ -22,8 +22,18 @@ export interface Note {
   dueDate?: string;
 }
 
+export interface UserProfile {
+    uid: string;
+    email?: string | null;
+    displayName?: string | null;
+    photoURL?: string | null;
+    notionApiKey?: string;
+    notionDatabaseId?: string;
+}
+
 type AuthContextType = {
   user: User | null;
+  userProfile: UserProfile | null;
   loading: boolean;
   notes: Note[];
   notesLoading: boolean;
@@ -32,6 +42,7 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  userProfile: null,
   loading: true,
   notes: [],
   notesLoading: true,
@@ -40,6 +51,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesLoading, setNotesLoading] = useState(true);
@@ -49,31 +61,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       
       if (user) {
-        const userRef = doc(db, 'users', user.uid);
-        try {
-            const docSnap = await getDoc(userRef);
-            const userProfileData = {
-                displayName: user.displayName,
-                email: user.email,
-                photoURL: user.photoURL,
-                lastLogin: serverTimestamp()
-            };
-            if (!docSnap.exists()) {
-                await setDoc(userRef, {
-                    ...userProfileData,
-                    createdAt: serverTimestamp()
-                });
-            } else {
-                await updateDoc(userRef, userProfileData);
-            }
-        } catch (error: any) {
-            console.error("Firestore Error: Could not create or update user profile.", error);
-            if (error.code === 'permission-denied') {
-                setNotesError("Permission Error: Could not save your user profile. Please update Firestore security rules.");
-            }
-        }
-
         setUser(user);
+        
+        // Listen for user profile changes
+        const userRef = doc(db, 'users', user.uid);
+        const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setUserProfile(docSnap.data() as UserProfile);
+            } else {
+                 // Create profile if it doesn't exist
+                const newUserProfile: UserProfile = {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL,
+                };
+                setDoc(userRef, { ...newUserProfile, createdAt: serverTimestamp() });
+            }
+        });
 
         setNotesLoading(true);
         const q = query(
@@ -101,9 +106,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
         
         setLoading(false);
-        return () => unsubscribeNotes();
+
+        return () => {
+            unsubscribeProfile();
+            unsubscribeNotes();
+        }
       } else {
         setUser(null);
+        setUserProfile(null);
         setLoading(false);
         setNotes([]);
         setNotesLoading(false);
@@ -114,7 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, notes, notesLoading, notesError }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, notes, notesLoading, notesError }}>
       {children}
     </AuthContext.Provider>
   );

@@ -21,6 +21,7 @@ import {
   Loader2,
   AlertTriangle,
   Home,
+  Settings,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
@@ -146,6 +147,14 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
       <SidebarFooter>
         <SidebarSeparator />
         <SidebarMenu>
+            <SidebarMenuItem>
+                <Button asChild variant="ghost" className="w-full justify-start" data-active={pathname === '/settings'}>
+                    <Link href="/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                    </Link>
+                </Button>
+            </SidebarMenuItem>
             <SidebarMenuItem>
                 <Button onClick={handleSignOut} variant="ghost" className="w-full justify-start">
                     <LogOut className="mr-2 h-4 w-4" />

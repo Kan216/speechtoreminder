@@ -2,7 +2,6 @@
 
 import MainSidebar from '@/components/main-sidebar';
 import { useAuth } from '@/hooks/use-auth';
-import { useNotifications } from '@/hooks/use-notifications';
 import { redirect } from 'next/navigation';
 import {
   SidebarProvider,
@@ -19,7 +18,6 @@ export default function NotesLayout({
   children: React.ReactNode;
 }) {
   const { user, loading, notes, notesLoading, notesError } = useAuth();
-  useNotifications(notes);
 
   if (loading) {
     return (
