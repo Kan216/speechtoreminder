@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useRef, useEffect } from 'react';
@@ -51,6 +52,14 @@ export default function VoiceRecorder() {
         }
     };
 
+    const handleRecordingToggle = () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    };
+
     const handleStopRecording = async (stream: MediaStream) => {
         stream.getTracks().forEach(track => track.stop()); // Stop the microphone access
         setIsRecording(false);
@@ -71,7 +80,7 @@ export default function VoiceRecorder() {
                         title: transcription.substring(0, 40) + (transcription.length > 40 ? '...' : ''),
                         content: transcription,
                         formatted_content: null,
-                        user_id: user.id,
+                        user_id: user.uid,
                         created_at: serverTimestamp()
                     });
 
@@ -104,15 +113,17 @@ export default function VoiceRecorder() {
 
     return (
         <div>
-            <Button onClick={startRecording} disabled={isTranscribing || !user} size="lg" className="rounded-full w-24 h-24 shadow-lg transition-all hover:scale-105 active:scale-95">
-                {isTranscribing ? (
+            <Button onClick={handleRecordingToggle} disabled={isTranscribing || !user} size="lg" className="rounded-full w-24 h-24 shadow-lg transition-all hover:scale-105 active:scale-95">
+                {isRecording ? (
+                    <StopCircle className="h-8 w-8" />
+                ) : isTranscribing ? (
                     <Loader2 className="h-8 w-8 animate-spin" />
                 ) : (
                     <Mic className="h-8 w-8" />
                 )}
             </Button>
             <p className="mt-4 text-sm text-muted-foreground">
-                {isRecording ? "Recording... Click to stop." : isTranscribing ? "Transcribing..." : user ? "Tap to record" : "Sign in to record"}
+                {isRecording ? "Recording... Tap to stop." : isTranscribing ? "Transcribing..." : user ? "Tap to record" : "Sign in to record"}
             </p>
         </div>
     );
