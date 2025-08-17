@@ -3,8 +3,8 @@
 
 /**
  * @fileOverview A robust AI flow for synchronizing a task with Notion.
- * This flow reads the API key from server environment variables for improved security
- * and provides detailed, specific error messages to the client.
+ * This flow now delegates the actual Notion API call to a dedicated service,
+ * improving separation of concerns and robustness.
  *
  * - syncToNotion - The function to call to sync a task.
  * - SyncToNotionInput - The input type for the function.
@@ -13,8 +13,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { Client, APIResponseError } from '@notionhq/client';
-import type { CreatePageParameters } from '@notionhq/client/build/src/api-endpoints';
+import { createNotionPage } from '@/services/notion-service';
+import { APIResponseError } from '@notionhq/client';
 
 const SyncToNotionInputSchema = z.object({
   note: z.any().describe('The task object to be synced.'),
@@ -29,11 +29,9 @@ const SyncToNotionOutputSchema = z.object({
 });
 export type SyncToNotionOutput = z.infer<typeof SyncToNotionOutputSchema>;
 
-
 export async function syncToNotion(input: SyncToNotionInput): Promise<SyncToNotionOutput> {
   return syncToNotionFlow(input);
 }
-
 
 const syncToNotionFlow = ai.defineFlow(
   {
@@ -42,72 +40,25 @@ const syncToNotionFlow = ai.defineFlow(
     outputSchema: SyncToNotionOutputSchema,
   },
   async (input: SyncToNotionInput): Promise<SyncToNotionOutput> => {
-    const { note, notionDatabaseId } = input;
-    const notionApiKey = process.env.NOTION_API_KEY;
-
-    if (!notionApiKey) {
-        return { success: false, error: 'The Notion API Key is not configured on the server.' };
-    }
-    if (!notionDatabaseId) {
-        return { success: false, error: 'The Notion Database ID is missing.' };
-    }
-
     try {
-      const notion = new Client({ 
-          auth: notionApiKey,
-      });
-
-      const pageProperties: CreatePageParameters['properties'] = {
-        'Name': {
-          type: 'title',
-          title: [
-            {
-              type: 'text',
-              text: { content: note.title },
-            },
-          ],
-        },
-        'Status': {
-          type: 'select',
-          select: { name: note.status || 'pending' },
-        },
-      };
-
-      if (note.dueDate) {
-        pageProperties['Due Date'] = {
-          type: 'date',
-          date: { start: new Date(note.dueDate).toISOString().split('T')[0] },
-        };
+      if (!input.notionDatabaseId) {
+        return { success: false, error: 'The Notion Database ID is missing.' };
       }
 
-      const pageChildren = note.subtasks?.map((subtask: any) => ({
-        object: 'block',
-        type: 'to_do',
-        to_do: {
-          rich_text: [{ type: 'text', text: { content: subtask.text } }],
-          checked: subtask.completed,
-        },
-      }));
-      
-      const response = await notion.pages.create({
-        parent: { database_id: notionDatabaseId },
-        properties: pageProperties,
-        children: pageChildren,
-      });
-
-      return { success: true, pageUrl: (response as any).url };
+      const pageUrl = await createNotionPage(input.note, input.notionDatabaseId);
+      return { success: true, pageUrl };
 
     } catch (error: unknown) {
-      console.error('Detailed Notion API Error:', JSON.stringify(error, null, 2));
+      console.error('Detailed Notion Sync Error in Flow:', JSON.stringify(error, null, 2));
 
       if (error instanceof APIResponseError) {
         switch (error.code) {
           case 'unauthorized':
-            return { success: false, error: 'Authentication failed. Please check your Notion API Key.' };
+            return { success: false, error: 'Authentication failed. Please check your Notion API Key in the server environment.' };
           case 'object_not_found':
             return { success: false, error: 'The Notion database was not found. Please verify the Database ID and that the integration is shared with the database.' };
           case 'validation_error':
-            return { success: false, error: `Notion reported a validation error: ${error.message}. This could be due to missing or misconfigured database properties (Name, Status, Due Date).` };
+            return { success: false, error: `Notion reported a validation error: ${error.message}. This could be due to missing or misconfigured database properties (e.g., Name, Status, Due Date).` };
           default:
             return { success: false, error: `A Notion API error occurred: ${error.message}` };
         }
