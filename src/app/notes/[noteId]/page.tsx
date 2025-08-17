@@ -66,10 +66,10 @@ export default function NotePage() {
   const initClientAndCreateEvent = useCallback(async (token: string, newDueDate: string) => {
     if (!note || !user) return;
 
-    if (!GOOGLE_API_KEY || !GOOGLE_CLIENT_ID) {
+    if (!GOOGLE_API_KEY || !GOOGLE_CLIENT_ID || GOOGLE_API_KEY.includes('YOUR_') || GOOGLE_CLIENT_ID.includes('YOUR_')) {
       toast({
         title: 'Configuration Error',
-        description: 'Google API Key or Client ID is missing. Please check your .env.local file.',
+        description: 'Google API Key or Client ID is missing or using placeholder values. Please create a .env.local file and set NEXT_PUBLIC_GOOGLE_API_KEY and NEXT_PUBLIC_GOOGLE_CLIENT_ID.',
         variant: 'destructive',
       });
       setIsSyncing(false);
@@ -134,7 +134,17 @@ export default function NotePage() {
     } catch (error: any) {
         console.error('Full Google Calendar API Error:', JSON.stringify(error, null, 2));
         let friendlyMessage = "An unexpected error occurred while syncing with Google Calendar.";
-        if (error.result?.error?.message) {
+        if (typeof error === 'string') {
+            try {
+                const parsedError = JSON.parse(error);
+                if (parsedError.details) {
+                    friendlyMessage = `Google Auth Error: ${parsedError.details}`;
+                }
+            } catch (e) {
+                // Not a JSON string, use the raw string
+                friendlyMessage = error;
+            }
+        } else if (error.result?.error?.message) {
             friendlyMessage = `Google Calendar Error: ${error.result.error.message}`;
         } else if (error.message) {
             friendlyMessage = error.message;
@@ -160,16 +170,18 @@ export default function NotePage() {
 
     try {
       const newDueDate = selectedDate.toISOString();
-      const credential = GoogleAuthProvider.credential(await user.getIdToken());
+      // This is a workaround to force re-authentication with Google to get a fresh accessToken
+      // that includes the calendar scope.
       const auth = getAuth();
+      if (!auth.currentUser) throw new Error("User not found");
       
-      const result = await reauthenticateWithPopup(auth.currentUser!, new GoogleAuthProvider());
-      const freshCredential = GoogleAuthProvider.credentialFromResult(result);
-      if (!freshCredential || !freshCredential.accessToken) {
+      const result = await reauthenticateWithPopup(auth.currentUser, new GoogleAuthProvider());
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (!credential || !credential.accessToken) {
           throw new Error("Could not get a fresh access token from Google.");
       }
       
-      await initClientAndCreateEvent(freshCredential.accessToken, newDueDate);
+      await initClientAndCreateEvent(credential.accessToken, newDueDate);
 
     } catch (error: any) {
         let friendlyMessage = error.message;
@@ -218,3 +230,4 @@ export default function NotePage() {
     </>
   );
 }
+
