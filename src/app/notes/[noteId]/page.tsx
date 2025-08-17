@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc, Timestamp, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect, notFound, useParams } from 'next/navigation';
@@ -10,31 +10,15 @@ import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
 import { scheduleEvent } from '@/ai/flows/schedule-event';
 import { useToast } from '@/hooks/use-toast';
-
-export interface Subtask {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
-export interface Note {
-  id: string;
-  title: string;
-  content: string;
-  formatted_content: string | null;
-  created_at: Timestamp;
-  subtasks: Subtask[];
-  progress: number;
-  status: 'pending' | 'inprogress' | 'finished';
-  dueDate?: string;
-  calendarEventId?: string;
-};
+import { Note } from '@/hooks/use-auth';
+import { DateTimePickerDialog } from '@/components/datetime-picker-dialog';
 
 export default function NotePage() {
   const { user, loading: authLoading } = useAuth();
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isDateTimePickerOpen, setIsDateTimePickerOpen] = useState(false);
   const params = useParams();
   const noteId = params.noteId as string;
   const { toast } = useToast();
@@ -56,15 +40,7 @@ export default function NotePage() {
         const data = docSnap.data();
         setNote({ 
           id: docSnap.id,
-          title: data.title,
-          content: data.content,
-          formatted_content: data.formatted_content,
-          created_at: data.created_at,
-          subtasks: data.subtasks || [],
-          progress: data.progress || 0,
-          status: data.status || 'pending',
-          dueDate: data.dueDate,
-          calendarEventId: data.calendarEventId,
+          ...data
         } as Note);
       } else {
         notFound();
@@ -79,38 +55,35 @@ export default function NotePage() {
     return () => unsubscribe();
   }, [user, authLoading, noteId]);
 
-  const handleSyncToCalendar = async () => {
-    if (!note || !user) return;
+  const handleDateTimeSubmit = async (selectedDate: Date | undefined) => {
+    if (!note || !user || !selectedDate) {
+      setIsDateTimePickerOpen(false);
+      return;
+    };
+    setIsDateTimePickerOpen(false);
     setIsSyncing(true);
 
+    const newDueDate = selectedDate.toISOString();
+
     try {
-      const { dueDate } = await new Promise<any>((resolve, reject) => {
-        const newDueDate = prompt("When is this task due?", note.dueDate || new Date().toISOString());
-        if (newDueDate) {
-            resolve({ dueDate: new Date(newDueDate).toISOString() });
-        } else {
-            reject("Invalid date");
-        }
-      });
-      
       const eventId = await scheduleEvent({
           userId: user.uid,
           title: note.title,
-          startTime: dueDate,
+          startTime: newDueDate,
           eventId: note.calendarEventId
       });
 
       const noteRef = doc(db, 'users', user.uid, 'notes', note.id);
-      await updateDoc(noteRef, { calendarEventId: eventId, dueDate: dueDate });
+      await updateDoc(noteRef, { calendarEventId: eventId, dueDate: newDueDate });
 
       toast({
-          title: 'Successfully synced to calendar!',
-          description: 'The task has been added or updated in your Google Calendar.'
+          title: 'Success!',
+          description: 'The task has been synced with your Google Calendar.'
       });
     } catch (error: any) {
         toast({
             title: 'Failed to sync to calendar',
-            description: error.message || 'There was an issue creating the calendar event.',
+            description: error.message || 'An unknown error occurred.',
             variant: 'destructive'
         });
     } finally {
@@ -134,12 +107,19 @@ export default function NotePage() {
             Could not load the note. This might be because of a network issue, <br />
             or you may not have permission to view it.
          </p>
-         <p className="mt-2 text-sm text-muted-foreground">
-            Please check your Firestore security rules in the Firebase Console.
-         </p>
       </div>
     )
   }
 
-  return <NoteEditor note={note} onSyncToCalendar={handleSyncToCalendar} isSyncing={isSyncing} />;
+  return (
+    <>
+      <NoteEditor note={note} onSyncToCalendar={() => setIsDateTimePickerOpen(true)} isSyncing={isSyncing} />
+      <DateTimePickerDialog 
+        isOpen={isDateTimePickerOpen}
+        onOpenChange={setIsDateTimePickerOpen}
+        initialDate={note.dueDate ? new Date(note.dueDate) : new Date()}
+        onSubmit={handleDateTimeSubmit}
+      />
+    </>
+  );
 }

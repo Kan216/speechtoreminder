@@ -10,9 +10,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Trash2, Check, Calendar as CalendarIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { Note, Subtask } from '@/app/notes/[noteId]/page';
+import { Note, Subtask } from '@/hooks/use-auth';
 import { Progress } from '@/components/ui/progress';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
@@ -60,13 +60,7 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
         await updateDoc(noteRef, updatedNote);
     } catch(error: any) {
         console.error("Error saving note:", error);
-        let description = "An unknown error occurred.";
-        if (error.code === 'permission-denied') {
-            description = "You don't have permission to save this note. Please check your Firestore security rules."
-        } else {
-            description = error.message;
-        }
-        toast({ title: 'Error saving note', description, variant: 'destructive' });
+        toast({ title: 'Error saving note', description: error.message, variant: 'destructive' });
     } finally {
         setIsSaving(false);
     }
@@ -84,6 +78,8 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
     const noteRef = getNoteRef();
     if (!noteRef) return;
     
+    if (!confirm('Are you sure you want to delete this task?')) return;
+
     setIsDeleting(true);
     try {
         await deleteDoc(noteRef);
@@ -109,8 +105,7 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
   };
 
   const handleMarkAsFinished = () => {
-    const allCompleted = note.subtasks.every(s => s.completed);
-    if(!allCompleted) {
+    if (note.subtasks.length > 0 && note.subtasks.some(s => !s.completed)) {
       toast({
         title: "Not all subtasks are complete",
         description: "Please complete all subtasks before marking as finished.",
@@ -129,9 +124,9 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-            <p>Task today</p>
+            <p>Task</p>
             {note.dueDate && (
-              <p className='font-semibold text-primary'>{format(new Date(note.dueDate), "PPP p")}</p>
+               <p className='font-semibold text-primary'>{format(new Date(note.dueDate), "PPP p")}</p>
             )}
           </div>
           <Input
@@ -143,8 +138,9 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
             {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" size="icon" onClick={onSyncToCalendar} disabled={isSyncing}>
-                {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarIcon className="h-4 w-4" />}
+            <Button variant="outline" onClick={onSyncToCalendar} disabled={isSyncing}>
+                {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarIcon className="mr-2 h-4 w-4" />}
+                {note.calendarEventId ? 'Resync' : 'Sync'} Calendar
             </Button>
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
@@ -152,10 +148,11 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
         <Card className="lg:col-span-2">
             <CardHeader>
                 <CardTitle>To-do list</CardTitle>
+                <CardDescription>Break your main task into smaller, manageable steps.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {note.subtasks && note.subtasks.length > 0 ? (
@@ -174,18 +171,21 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
                         </div>
                     ))
                 ) : (
-                    <p className="text-muted-foreground text-center py-4">No sub-tasks for this item.</p>
+                    <p className="text-muted-foreground text-center py-10">No sub-tasks for this item. Created by voice note?</p>
                 )}
             </CardContent>
         </Card>
 
         <div className="space-y-6">
             <Card className="text-center">
+                 <CardHeader>
+                    <CardTitle>Progress</CardTitle>
+                </CardHeader>
                 <CardContent className="p-6">
                     <div className="relative h-40 w-40 mx-auto">
                         <svg className="w-full h-full" viewBox="0 0 100 100">
                             <circle
-                                className="text-gray-200"
+                                className="text-gray-200 dark:text-gray-700"
                                 strokeWidth="10"
                                 stroke="currentColor"
                                 fill="transparent"
