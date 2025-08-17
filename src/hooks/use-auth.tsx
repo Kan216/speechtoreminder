@@ -63,13 +63,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (user) {
         setUser(user);
         
-        // Listen for user profile changes
         const userRef = doc(db, 'users', user.uid);
         const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
                 setUserProfile(docSnap.data() as UserProfile);
             } else {
-                 // Create profile if it doesn't exist
                 const newUserProfile: UserProfile = {
                     uid: user.uid,
                     email: user.email,

@@ -4,14 +4,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
-    const { note, notionDatabaseId } = await req.json();
-    const notionApiKey = process.env.NOTION_API_KEY;
+    const { note, notionDatabaseId, notionApiKey } = await req.json();
 
     if (!notionApiKey) {
-        return NextResponse.json({ success: false, error: 'The Notion API Key is not configured on the server.' }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'The Notion API Key is not configured. Please set it in Settings.' }, { status: 500 });
     }
-    if (!note || !notionDatabaseId) {
-        return NextResponse.json({ success: false, error: 'Missing note or notionDatabaseId' }, { status: 400 });
+    if (!notionDatabaseId) {
+        return NextResponse.json({ success: false, error: 'The Notion Database ID is not configured. Please set it in Settings.' }, { status: 500 });
+    }
+    if (!note) {
+        return NextResponse.json({ success: false, error: 'Missing note data.' }, { status: 400 });
     }
 
     const pageProperties: any = {

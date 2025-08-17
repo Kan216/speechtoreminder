@@ -127,11 +127,12 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
     setIsSyncing(true);
     try {
       const dbId = userProfile?.notionDatabaseId;
+      const apiKey = userProfile?.notionApiKey;
 
-      if (!dbId) {
+      if (!dbId || !apiKey) {
         toast({
             title: 'Notion Not Configured',
-            description: 'Please go to Settings to save your Notion Database ID.',
+            description: 'Please go to Settings to save your Notion API Key and Database ID.',
             variant: 'destructive',
         });
         router.push('/settings');
@@ -152,6 +153,7 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
         body: JSON.stringify({
           note: plainNote,
           notionDatabaseId: dbId,
+          notionApiKey: apiKey,
         }),
       });
 

@@ -103,6 +103,14 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
               </Link>
             </Button>
           </SidebarMenuItem>
+           <SidebarMenuItem>
+            <Button asChild variant="ghost" className="w-full justify-start" data-active={pathname.startsWith('/settings')}>
+              <Link href="/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Link>
+            </Button>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <Button variant="default" className="w-full" onClick={handleNewNote} disabled={isCreating}>
                 {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
