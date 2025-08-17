@@ -65,38 +65,43 @@ export default function NotePage() {
   const handleNotionSync = async () => {
     if (!note || !user) return;
 
-    // First check if user has configured Notion
-    const userRef = doc(db, 'users', user.uid);
-    const userDoc = await getDoc(userRef);
-    const userData = userDoc.data();
-
-    if (!userData?.notionApiKey || !userData?.notionDatabaseId) {
-        toast({
-            title: 'Notion Not Configured',
-            description: 'Please configure your Notion API Key and Database ID in the Settings page before syncing.',
-            variant: 'destructive',
-            duration: 10000,
-        });
-        router.push('/settings');
-        return;
-    }
-
     setIsSyncing(true);
     try {
-      const result = await syncToNotion({
-        title: note.title,
-        subtasks: note.subtasks.map(st => ({ text: st.text, completed: st.completed })),
-        userId: user.uid,
-      });
+        // Step 1: Fetch credentials from the client
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+        const userData = userDoc.data();
+        const notionApiKey = userData?.notionApiKey;
+        const notionDatabaseId = userData?.notionDatabaseId;
 
-      if (result.success) {
-        toast({
-          title: 'Synced to Notion!',
-          description: `Page created successfully.`,
+        if (!notionApiKey || !notionDatabaseId) {
+            toast({
+                title: 'Notion Not Configured',
+                description: 'Please configure your Notion API Key and Database ID in the Settings page before syncing.',
+                variant: 'destructive',
+                duration: 10000,
+            });
+            router.push('/settings');
+            setIsSyncing(false);
+            return;
+        }
+
+        // Step 2: Pass credentials to the flow
+        const result = await syncToNotion({
+            title: note.title,
+            subtasks: note.subtasks.map(st => ({ text: st.text, completed: st.completed })),
+            notionApiKey,
+            notionDatabaseId,
         });
-      } else {
-        throw new Error(result.error || 'An unknown error occurred during sync.');
-      }
+
+        if (result.success) {
+            toast({
+            title: 'Synced to Notion!',
+            description: `Page created successfully.`,
+            });
+        } else {
+            throw new Error(result.error || 'An unknown error occurred during sync.');
+        }
     } catch (error: any) {
       console.error('Notion Sync Error:', error);
       toast({

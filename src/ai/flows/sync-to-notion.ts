@@ -3,12 +3,11 @@
 
 /**
  * @fileOverview A flow to sync a task and its subtasks to a user's Notion database.
+ * This flow now receives credentials directly and does not access Firestore.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/client';
 
 const SyncToNotionInputSchema = z.object({
   title: z.string().describe('The title of the task.'),
@@ -16,7 +15,8 @@ const SyncToNotionInputSchema = z.object({
     text: z.string(),
     completed: z.boolean(),
   })).describe('A list of subtasks.'),
-  userId: z.string().describe("The user's unique ID."),
+  notionApiKey: z.string().describe("The user's Notion API Key."),
+  notionDatabaseId: z.string().describe("The user's Notion Database ID."),
 });
 
 export type SyncToNotionInput = z.infer<typeof SyncToNotionInputSchema>;
@@ -40,33 +40,6 @@ const syncToNotionFlow = ai.defineFlow(
     outputSchema: SyncToNotionOutputSchema,
   },
   async (input) => {
-    
-    // Get user-specific Notion credentials from Firestore
-    let notionApiKey: string | undefined;
-    let notionDatabaseId: string | undefined;
-
-    try {
-        const userRef = doc(db, 'users', input.userId);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-            const userData = userDoc.data();
-            notionApiKey = userData.notionApiKey;
-            notionDatabaseId = userData.notionDatabaseId;
-        } else {
-            return { success: false, error: 'User profile not found.' };
-        }
-    } catch(err: any) {
-        return { success: false, error: 'Failed to retrieve user credentials from Firestore.' };
-    }
-
-
-    if (!notionApiKey) {
-      return { success: false, error: 'Notion API Key is not configured for this user.' };
-    }
-    if (!notionDatabaseId) {
-        return { success: false, error: 'Notion Database ID is not configured for this user.' };
-    }
-
     try {
       const children = input.subtasks.map(subtask => ({
         object: 'block',
@@ -85,12 +58,12 @@ const syncToNotionFlow = ai.defineFlow(
       const response = await fetch('https://api.notion.com/v1/pages', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${notionApiKey}`,
+          'Authorization': `Bearer ${input.notionApiKey}`,
           'Content-Type': 'application/json',
           'Notion-Version': '2022-06-28',
         },
         body: JSON.stringify({
-          parent: { database_id: notionDatabaseId },
+          parent: { database_id: input.notionDatabaseId },
           properties: {
             Name: {
               title: [
@@ -118,6 +91,7 @@ const syncToNotionFlow = ai.defineFlow(
 
       return { success: true };
     } catch (err: any) {
+      console.error("Error in syncToNotionFlow:", err);
       return { success: false, error: err.message };
     }
   }
