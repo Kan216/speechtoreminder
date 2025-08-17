@@ -2,19 +2,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, Timestamp, collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect, notFound, useParams } from 'next/navigation';
 import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
 
-type Note = {
+export interface Subtask {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export interface Note {
   id: string;
   title: string;
   content: string;
   formatted_content: string | null;
   created_at: Timestamp;
+  subtasks: Subtask[];
+  progress: number;
+  status: 'pending' | 'inprogress' | 'finished';
 };
 
 export default function NotePage() {
@@ -30,28 +39,36 @@ export default function NotePage() {
       redirect('/auth');
       return;
     }
+    if (!noteId) {
+      setLoading(false);
+      return;
+    }
 
-    const fetchNote = async () => {
-      if (!noteId) return;
-      try {
-        const noteRef = doc(db, 'users', user.uid, 'notes', noteId);
-        const noteSnap = await getDoc(noteRef);
-
-        if (noteSnap.exists()) {
-          setNote({ id: noteSnap.id, ...noteSnap.data() } as Note);
-        } else {
-          notFound();
-        }
-      } catch (error) {
-        console.error('Error fetching note:', error);
-        // This will show a more specific error in the UI if fetching fails
-        setNote(null);
-      } finally {
-        setLoading(false);
+    const noteRef = doc(db, 'users', user.uid, 'notes', noteId);
+    const unsubscribe = onSnapshot(noteRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setNote({ 
+          id: docSnap.id,
+          title: data.title,
+          content: data.content,
+          formatted_content: data.formatted_content,
+          created_at: data.created_at,
+          subtasks: data.subtasks || [],
+          progress: data.progress || 0,
+          status: data.status || 'pending',
+        } as Note);
+      } else {
+        notFound();
       }
-    };
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching note:', error);
+      setNote(null);
+      setLoading(false);
+    });
 
-    fetchNote();
+    return () => unsubscribe();
   }, [user, authLoading, noteId]);
 
   if (authLoading || loading) {

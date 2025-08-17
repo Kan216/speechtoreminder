@@ -15,27 +15,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   LogOut,
-  Search,
   PlusCircle,
   FileText,
   Loader2,
   AlertTriangle,
+  Settings,
+  Home,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
 import { signOut } from 'firebase/auth';
-import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useRouter, useParams } from 'next/navigation';
-import { Input } from './ui/input';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-
-type Note = {
-  id: string;
-  title: string | null;
-  created_at: Timestamp;
-};
+import { Note } from '@/hooks/use-auth';
 
 interface MainSidebarProps {
   user: User;
@@ -60,16 +55,18 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
     setIsCreating(true);
     try {
         const docRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
-            title: 'Untitled Note',
+            title: 'Untitled Task',
             content: '',
-            formatted_content: null,
+            subtasks: [],
+            progress: 0,
+            status: 'pending',
             created_at: serverTimestamp(),
             user_id: user.uid
         });
         router.push(`/notes/${docRef.id}`);
     } catch (error: any) {
         toast({
-            title: "Error creating note",
+            title: "Error creating task",
             description: error.message,
             variant: "destructive"
         })
@@ -81,8 +78,8 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
   return (
     <>
       <SidebarHeader>
-        <div className="flex items-center gap-2">
-          <Avatar className="h-8 w-8">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-10 w-10">
             <AvatarImage src={user.photoURL ?? undefined} />
             <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
@@ -95,22 +92,25 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
       </SidebarHeader>
 
       <SidebarContent className="p-2">
-        <div className="mb-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search..." className="pl-8" />
-          </div>
-        </div>
-
-        <div className="mb-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <Button asChild variant="ghost" className="w-full justify-start" data-active={!noteId}>
+              <Link href="/notes">
+                <Home className="mr-2 h-4 w-4" />
+                Dashboard
+              </Link>
+            </Button>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <Button variant="default" className="w-full" onClick={handleNewNote} disabled={isCreating}>
                 {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                New Note
+                New Task
             </Button>
-        </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
         
-        <SidebarGroup className='p-0'>
-          <SidebarGroupLabel>Notes</SidebarGroupLabel>
+        <SidebarGroup className='p-0 mt-4'>
+          <SidebarGroupLabel>Tasks</SidebarGroupLabel>
           <SidebarMenu>
             {notesLoading ? (
               <>
@@ -124,7 +124,7 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
                         <AlertTriangle className='h-4 w-4' />
                         <p>Permission Error</p>
                     </div>
-                    <p>Could not load notes. Please update your Firestore security rules to allow listing notes.</p>
+                    <p>Could not load tasks. Please update your Firestore security rules to allow listing tasks.</p>
                 </div>
             ) : (
                 notes.map((note) => (
@@ -132,7 +132,7 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
                     <Button asChild variant="ghost" className="w-full justify-start" data-active={noteId === note.id}>
                         <Link href={`/notes/${note.id}`}>
                             <FileText className="mr-2 h-4 w-4" />
-                            <span className="truncate">{note.title || 'Untitled Note'}</span>
+                            <span className="truncate">{note.title || 'Untitled Task'}</span>
                         </Link>
                     </Button>
                 </SidebarMenuItem>
@@ -145,6 +145,12 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
       <SidebarFooter>
         <SidebarSeparator />
         <SidebarMenu>
+            <SidebarMenuItem>
+                <Button variant="ghost" className="w-full justify-start">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                </Button>
+            </SidebarMenuItem>
             <SidebarMenuItem>
                 <Button onClick={handleSignOut} variant="ghost" className="w-full justify-start">
                     <LogOut className="mr-2 h-4 w-4" />

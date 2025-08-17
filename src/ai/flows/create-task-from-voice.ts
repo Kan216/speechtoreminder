@@ -1,0 +1,59 @@
+'use server';
+
+/**
+ * @fileOverview An AI agent for creating structured tasks from voice notes.
+ *
+ * - createTaskFromVoice - A function that transcribes audio and structures it into a task.
+ * - CreateTaskFromVoiceInput - The input type for the function.
+ * - CreateTaskFromVoiceOutput - The return type for the function.
+ */
+
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+
+const CreateTaskFromVoiceInputSchema = z.object({
+  audioDataUri: z
+    .string()
+    .describe(
+      'A recording of the user, as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'
+    ),
+});
+export type CreateTaskFromVoiceInput = z.infer<typeof CreateTaskFromVoiceInputSchema>;
+
+const CreateTaskFromVoiceOutputSchema = z.object({
+  taskTitle: z.string().describe('A concise title for the task.'),
+  subtasks: z.array(z.string()).describe('A list of sub-tasks or to-do items derived from the note.'),
+});
+export type CreateTaskFromVoiceOutput = z.infer<typeof CreateTaskFromVoiceOutputSchema>;
+
+export async function createTaskFromVoice(input: CreateTaskFromVoiceInput): Promise<CreateTaskFromVoiceOutput> {
+  return createTaskFromVoiceFlow(input);
+}
+
+const prompt = ai.definePrompt({
+  name: 'createTaskFromVoicePrompt',
+  input: {schema: CreateTaskFromVoiceInputSchema},
+  output: {schema: CreateTaskFromVoiceOutputSchema},
+  prompt: `You are an expert at taking transcribed audio and converting it into a structured task list.
+  
+  Your task is to:
+  1.  Create a clear and concise title for the overall task.
+  2.  Identify the individual action items or sub-tasks from the transcription.
+  3.  Format these action items into a simple list of strings.
+
+  Transcribe the following audio and convert it into a task title and a list of subtasks.
+  
+  Audio: {{media url=audioDataUri}}`,
+});
+
+const createTaskFromVoiceFlow = ai.defineFlow(
+  {
+    name: 'createTaskFromVoiceFlow',
+    inputSchema: CreateTaskFromVoiceInputSchema,
+    outputSchema: CreateTaskFromVoiceOutputSchema,
+  },
+  async input => {
+    const {output} = await prompt(input);
+    return output!;
+  }
+);

@@ -4,16 +4,25 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Mic, StopCircle, Loader2 } from 'lucide-react';
-import { transcribeVoiceNote } from '@/ai/flows/transcribe-voice-note';
+import { createTaskFromVoice } from '@/ai/flows/create-task-from-voice';
 import { useAuth } from '@/hooks/use-auth';
 import { db } from '@/lib/firebase/client';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { v4 as uuidv4 } from 'uuid';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog"
 
 export default function VoiceRecorder() {
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const { user } = useAuth();
@@ -32,16 +41,19 @@ export default function VoiceRecorder() {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
+            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             mediaRecorderRef.current = recorder;
+
             recorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
                     audioChunksRef.current.push(event.data);
                 }
             };
+            
             recorder.onstop = () => {
                 handleStopRecording(stream);
             };
+
             audioChunksRef.current = [];
             recorder.start();
             setIsRecording(true);
@@ -52,6 +64,7 @@ export default function VoiceRecorder() {
                 description: 'Could not access the microphone. Please check your browser permissions.',
                 variant: 'destructive',
             });
+            setIsDialogOpen(false);
         }
     };
 
@@ -65,15 +78,22 @@ export default function VoiceRecorder() {
         if (isRecording) {
             stopRecording();
         } else {
+            setIsDialogOpen(true);
             startRecording();
         }
     };
 
     const handleStopRecording = async (stream: MediaStream) => {
-        stream.getTracks().forEach(track => track.stop()); // Stop the microphone access
+        stream.getTracks().forEach(track => track.stop());
         setIsRecording(false);
         setIsTranscribing(true);
 
+        if (audioChunksRef.current.length === 0) {
+            setIsTranscribing(false);
+            setIsDialogOpen(false);
+            return;
+        }
+        
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
 
         const reader = new FileReader();
@@ -82,58 +102,91 @@ export default function VoiceRecorder() {
             const base64Audio = reader.result as string;
             
             try {
-                const { transcription } = await transcribeVoiceNote({ audioDataUri: base64Audio });
-
+                const { taskTitle, subtasks } = await createTaskFromVoice({ audioDataUri: base64Audio });
+                
                 if (user) {
+                    const subtasksWithIds = subtasks.map(subtask => ({
+                        id: uuidv4(),
+                        text: subtask,
+                        completed: false
+                    }));
+
                     const newNoteRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
-                        title: transcription.substring(0, 40) + (transcription.length > 40 ? '...' : ''),
-                        content: transcription,
-                        formatted_content: null,
+                        title: taskTitle,
+                        content: '', // No longer used
+                        subtasks: subtasksWithIds,
+                        progress: 0,
+                        status: 'pending',
                         user_id: user.uid,
                         created_at: serverTimestamp()
                     });
 
                     toast({
-                        title: 'Transcription Complete!',
-                        description: 'Your new note has been created.',
+                        title: 'Task Created!',
+                        description: 'Your new task has been created from your voice note.',
                     });
                     router.push(`/notes/${newNoteRef.id}`);
                 }
             } catch (error) {
-                console.error('Transcription failed:', error);
+                console.error('Task creation failed:', error);
                 toast({
-                    title: 'Transcription Failed',
-                    description: 'Could not transcribe the voice note. Please try again.',
+                    title: 'Task Creation Failed',
+                    description: 'Could not create a task from the voice note. Please try again.',
                     variant: 'destructive',
                 });
             } finally {
                 setIsTranscribing(false);
+                setIsDialogOpen(false);
             }
         };
     };
 
+    const handleCancel = () => {
+        stopRecording();
+        setIsDialogOpen(false);
+    }
+    
+    // Add uuid package for subtask IDs
     useEffect(() => {
+        const script = document.createElement('script');
+        script.src = "https://cdn.jsdelivr.net/npm/uuid@8.3.2/dist/umd/uuidv4.min.js";
+        script.async = true;
+        document.body.appendChild(script);
+
         return () => {
             if (mediaRecorderRef.current && mediaRecorderRef.current.stream) {
                 mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
             }
-        };
+        }
     }, []);
 
     return (
-        <div>
-            <Button onClick={handleRecordingToggle} disabled={isTranscribing} size="lg" className="rounded-full w-24 h-24 shadow-lg transition-all hover:scale-105 active:scale-95">
-                {isRecording ? (
-                    <StopCircle className="h-8 w-8" />
-                ) : isTranscribing ? (
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                ) : (
-                    <Mic className="h-8 w-8" />
-                )}
+        <>
+            <Button onClick={handleRecordingToggle}>
+                <Mic className="mr-2 h-4 w-4" />
+                Create with Voice
             </Button>
-            <p className="mt-4 text-sm text-muted-foreground">
-                {isRecording ? "Recording... Tap to stop." : isTranscribing ? "Transcribing..." : user ? "Tap to record" : "Sign in to record"}
-            </p>
-        </div>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent onEscapeKeyDown={handleCancel} onPointerDownOutside={handleCancel}>
+                    <DialogHeader>
+                        <DialogTitle className="text-center text-2xl">Voice Task Creation</DialogTitle>
+                        <DialogDescription className="text-center">
+                            {isRecording ? "Recording in progress..." : isTranscribing ? "Processing your request..." : "Start speaking..."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                        <div className={`relative flex items-center justify-center h-32 w-32 rounded-full ${isRecording ? 'bg-red-500/20' : 'bg-primary/10'}`}>
+                           <div className={`h-24 w-24 rounded-full flex items-center justify-center ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-primary'}`}>
+                                {isTranscribing ? <Loader2 className="h-10 w-10 animate-spin text-white" /> : <Mic className="h-10 w-10 text-white" />}
+                           </div>
+                        </div>
+                        <p className="text-muted-foreground">{isRecording ? "Tap button to stop" : ""}</p>
+                    </div>
+                     <Button onClick={stopRecording} disabled={!isRecording} variant="destructive">
+                        <StopCircle className="mr-2 h-4 w-4" /> Stop Recording
+                    </Button>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }

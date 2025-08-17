@@ -1,5 +1,4 @@
 import { config } from 'dotenv';
 config();
 
-import '@/ai/flows/format-note.ts';
-import '@/ai/flows/transcribe-voice-note.ts';
+import '@/ai/flows/create-task-from-voice.ts';

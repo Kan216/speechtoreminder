@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/hooks/use-auth';
+import { Plus_Jakarta_Sans } from 'next/font/google';
+
+const font = Plus_Jakarta_Sans({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'VoiceNotes',
-  description: 'Intelligent voice notes with AI transcription and formatting.',
+  title: 'TaskGoal',
+  description: 'Your personal AI-powered task manager.',
 };
 
 export default function RootLayout({
@@ -15,15 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter&display=swap"
-          rel="stylesheet"
-        ></link>
-      </head>
-      <body className="font-body antialiased">
+      <body className={`${font.className} antialiased`}>
         <AuthProvider>
             {children}
         </AuthProvider>
