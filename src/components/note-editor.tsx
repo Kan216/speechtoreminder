@@ -17,7 +17,6 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
-import { syncToNotion } from '@/ai/flows/sync-to-notion';
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
   let timeout: NodeJS.Timeout;
@@ -145,10 +144,18 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
         created_at: note.created_at.toDate().toISOString(),
       };
 
-      const result = await syncToNotion({
-        note: plainNote,
-        notionDatabaseId: dbId,
+      const response = await fetch('/api/notion-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          note: plainNote,
+          notionDatabaseId: dbId,
+        }),
       });
+
+      const result = await response.json();
 
       if (result.success) {
         toast({
