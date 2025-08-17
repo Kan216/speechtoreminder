@@ -11,7 +11,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { scheduleEvent } from './schedule-event';
 
 const CreateTaskFromVoiceInputSchema = z.object({
   audioDataUri: z
@@ -30,24 +29,9 @@ const CreateTaskFromVoiceOutputSchema = z.object({
 });
 export type CreateTaskFromVoiceOutput = z.infer<typeof CreateTaskFromVoiceOutputSchema>;
 
-export async function createTaskFromVoice(input: CreateTaskFromVoiceInput): Promise<CreateTaskFromVoiceOutput & { calendarEventId?: string }> {
+// This flow no longer interacts with the calendar directly.
+export async function createTaskFromVoice(input: CreateTaskFromVoiceInput): Promise<CreateTaskFromVoiceOutput> {
   const taskDetails = await createTaskFromVoiceFlow(input);
-
-  if (taskDetails.dueDate) {
-    try {
-      const eventId = await scheduleEvent({
-        userId: input.userId,
-        title: taskDetails.taskTitle,
-        startTime: taskDetails.dueDate,
-      });
-      return { ...taskDetails, calendarEventId: eventId };
-    } catch(e) {
-        console.error("Failed to schedule event", e);
-        // Do not block task creation if calendar event fails
-        return taskDetails;
-    }
-  }
-
   return taskDetails;
 }
 

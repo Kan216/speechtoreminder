@@ -1,17 +1,20 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect, notFound, useParams } from 'next/navigation';
 import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
-import { scheduleEvent, ScheduleEventInput } from '@/ai/flows/schedule-event';
 import { useToast } from '@/hooks/use-toast';
 import { Note } from '@/hooks/use-auth';
 import { DateTimePickerDialog } from '@/components/datetime-picker-dialog';
+import { GoogleAuthProvider, reauthenticateWithPopup, getAuth } from 'firebase/auth';
+
+declare const gapi: any;
+declare const google: any;
 
 export default function NotePage() {
   const { user, loading: authLoading } = useAuth();
@@ -22,6 +25,11 @@ export default function NotePage() {
   const params = useParams();
   const noteId = params.noteId as string;
   const { toast } = useToast();
+
+  const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
+  const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
+  const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+  const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
   useEffect(() => {
     if (authLoading) return;
@@ -54,6 +62,83 @@ export default function NotePage() {
 
     return () => unsubscribe();
   }, [user, authLoading, noteId]);
+  
+  const initClientAndCreateEvent = useCallback(async (token: string, newDueDate: string) => {
+    if (!note || !user) return;
+    
+    try {
+        await new Promise<void>((resolve, reject) => {
+            gapi.load('client', async () => {
+                try {
+                    await gapi.client.init({
+                        apiKey: GOOGLE_API_KEY,
+                        clientId: GOOGLE_CLIENT_ID,
+                        discoveryDocs: [DISCOVERY_DOC],
+                        scope: SCOPES,
+                    });
+                     // Set the token for the API client
+                    gapi.client.setToken({ access_token: token });
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
+
+        const eventEndTime = new Date(new Date(newDueDate).getTime() + 60 * 60 * 1000).toISOString();
+
+        const event = {
+          summary: note.title,
+          start: {
+            dateTime: newDueDate,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
+          end: {
+            dateTime: eventEndTime,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
+        };
+
+        const request = note.calendarEventId
+            ? gapi.client.calendar.events.update({
+                calendarId: 'primary',
+                eventId: note.calendarEventId,
+                resource: event,
+              })
+            : gapi.client.calendar.events.insert({
+                calendarId: 'primary',
+                resource: event,
+              });
+
+        const response = await request;
+        const eventId = response.result.id;
+
+        const noteRef = doc(db, 'users', user.uid, 'notes', note.id);
+        await updateDoc(noteRef, { calendarEventId: eventId, dueDate: newDueDate });
+
+        toast({
+            title: 'Success!',
+            description: 'The task has been synced with your Google Calendar.'
+        });
+
+    } catch (error: any) {
+        console.error('Full Google Calendar API Error:', error);
+        let friendlyMessage = "An unexpected error occurred while syncing with Google Calendar.";
+        if (error.result?.error?.message) {
+            friendlyMessage = `Google Calendar Error: ${error.result.error.message}`;
+        } else if (error.message) {
+            friendlyMessage = error.message;
+        }
+        toast({
+            title: 'Failed to sync to calendar',
+            description: friendlyMessage,
+            variant: 'destructive'
+        });
+    } finally {
+        setIsSyncing(false);
+    }
+  }, [note, user, toast, GOOGLE_API_KEY, GOOGLE_CLIENT_ID]);
+
 
   const handleDateTimeSubmit = async (selectedDate: Date | undefined) => {
     if (!note || !user || !selectedDate) {
@@ -65,36 +150,31 @@ export default function NotePage() {
 
     try {
       const newDueDate = selectedDate.toISOString();
-
-      const scheduleEventInput: ScheduleEventInput = {
-        userId: user.uid,
-        title: note.title,
-        startTime: newDueDate,
-      };
-
-      if (note.calendarEventId) {
-        scheduleEventInput.eventId = note.calendarEventId;
+      const credential = GoogleAuthProvider.credential(await user.getIdToken());
+      const auth = getAuth();
+      
+      const result = await reauthenticateWithPopup(auth.currentUser!, new GoogleAuthProvider());
+      const freshCredential = GoogleAuthProvider.credentialFromResult(result);
+      if (!freshCredential || !freshCredential.accessToken) {
+          throw new Error("Could not get a fresh access token from Google.");
       }
       
-      const eventId = await scheduleEvent(scheduleEventInput);
+      await initClientAndCreateEvent(freshCredential.accessToken, newDueDate);
 
-      const noteRef = doc(db, 'users', user.uid, 'notes', note.id);
-      await updateDoc(noteRef, { calendarEventId: eventId, dueDate: newDueDate });
-
-      toast({
-          title: 'Success!',
-          description: 'The task has been synced with your Google Calendar.'
-      });
     } catch (error: any) {
+        let friendlyMessage = error.message;
+        if (error.code === 'auth/popup-closed-by-user') {
+            friendlyMessage = 'The Google authentication popup was closed before completing.';
+        }
         toast({
-            title: 'Failed to sync to calendar',
-            description: error.message || 'An unknown error occurred.',
+            title: 'Authentication Failed',
+            description: friendlyMessage,
             variant: 'destructive'
         });
-    } finally {
         setIsSyncing(false);
-    }
+    } 
   };
+
 
   if (authLoading || loading) {
     return (
