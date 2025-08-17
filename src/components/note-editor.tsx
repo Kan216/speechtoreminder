@@ -18,16 +18,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { syncToNotion } from '@/ai/flows/sync-to-notion';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from '@/components/ui/dialog';
-
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
   let timeout: NodeJS.Timeout;
@@ -45,10 +35,7 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isNotionDialogOpen, setIsNotionDialogOpen] = useState(false);
-  const [notionApiKey, setNotionApiKey] = useState('');
-  const [notionDatabaseId, setNotionDatabaseId] = useState('');
-
+  
   const { toast } = useToast();
   const router = useRouter();
   const { user, userProfile } = useAuth();
@@ -56,13 +43,6 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
   useEffect(() => {
     setNote(initialNote);
   }, [initialNote]);
-
-  useEffect(() => {
-    if (isNotionDialogOpen) {
-      setNotionApiKey(userProfile?.notionApiKey || '');
-      setNotionDatabaseId(userProfile?.notionDatabaseId || '');
-    }
-  }, [isNotionDialogOpen, userProfile]);
 
   const getNoteRef = useCallback(() => {
     if (!user) return null;
@@ -147,11 +127,15 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
    const handleNotionSync = async () => {
     setIsSyncing(true);
     try {
-      const apiKey = userProfile?.notionApiKey;
       const dbId = userProfile?.notionDatabaseId;
 
-      if (!apiKey || !dbId) {
-        setIsNotionDialogOpen(true);
+      if (!dbId) {
+        toast({
+            title: 'Notion Not Configured',
+            description: 'Please go to Settings to save your Notion Database ID.',
+            variant: 'destructive',
+        });
+        router.push('/settings');
         setIsSyncing(false);
         return;
       }
@@ -163,7 +147,6 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
 
       const result = await syncToNotion({
         note: plainNote,
-        notionApiKey: apiKey,
         notionDatabaseId: dbId,
       });
 
@@ -195,21 +178,6 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
     }
   };
 
-  const handleSaveNotionCredentials = async () => {
-    if (!user) return;
-    const userRef = doc(db, 'users', user.uid);
-    try {
-      await updateDoc(userRef, {
-        notionApiKey: notionApiKey,
-        notionDatabaseId: notionDatabaseId,
-      });
-      toast({ title: 'Credentials Saved', description: 'Your Notion credentials have been saved.' });
-      setIsNotionDialogOpen(false);
-      handleNotionSync(); // Retry syncing after saving
-    } catch (error: any) {
-       toast({ title: 'Error Saving Credentials', description: error.message, variant: 'destructive' });
-    }
-  };
 
   return (
     <div className="flex h-full flex-col p-4 md:p-6 lg:p-8 space-y-6 bg-background">
@@ -327,54 +295,6 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
             </Button>
         </div>
       </div>
-      <Dialog open={isNotionDialogOpen} onOpenChange={setIsNotionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Connect to Notion</DialogTitle>
-            <DialogDescription>
-              Please provide your Notion API Key and Database ID to sync your tasks. This information will be stored securely in your user profile.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="notion-api-key">Notion API Key</Label>
-              <Input
-                id="notion-api-key"
-                type="password"
-                placeholder="secret_..."
-                value={notionApiKey}
-                onChange={(e) => setNotionApiKey(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                You can get this from{' '}
-                <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="underline">
-                  your Notion integrations page
-                </a>
-                .
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notion-database-id">Notion Database ID</Label>
-              <Input
-                id="notion-database-id"
-                placeholder="The 32 character ID from your database URL"
-                value={notionDatabaseId}
-                onChange={(e) => setNotionDatabaseId(e.target.value)}
-              />
-               <p className="text-xs text-muted-foreground">
-                This is the 32-character ID from your database URL. (e.g., notion.so/workspace/
-                <strong>a1b2c3d4e5f61234567890abcdef123456</strong>?v=...).
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-                <Button type="button" variant="secondary">Cancel</Button>
-            </DialogClose>
-            <Button onClick={handleSaveNotionCredentials}>Save and Sync</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
