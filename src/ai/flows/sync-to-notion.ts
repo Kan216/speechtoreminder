@@ -1,119 +1,136 @@
 
 'use server';
+
 /**
- * @fileOverview A Genkit flow for syncing a task to a Notion database.
+ * @fileOverview A robust AI flow for synchronizing a task with Notion.
+ * This flow now expects credentials to be passed in directly and provides
+ * detailed, specific error messages to the client for easier debugging.
+ *
+ * - syncToNotion - The function to call to sync a task.
+ * - SyncToNotionInput - The input type for the function.
+ * - SyncToNotionOutput - The return type for the function.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { Client } from '@notionhq/client';
+import { Client, APIResponseError } from '@notionhq/client';
 import type { CreatePageParameters } from '@notionhq/client/build/src/api-endpoints';
+import type { Note } from '@/hooks/use-auth';
 
 const SyncToNotionInputSchema = z.object({
+  note: z.any().describe('The task object to be synced.'),
   notionApiKey: z.string().describe('The user\'s Notion API key.'),
   notionDatabaseId: z.string().describe('The ID of the Notion database to sync to.'),
-  taskTitle: z.string().describe('The title of the task.'),
-  subtasks: z.array(z.object({
-      id: z.string(),
-      text: z.string(),
-      completed: z.boolean(),
-  })).optional().describe('A list of sub-tasks.'),
-  status: z.string().describe('The current status of the task (e.g., pending, inprogress, finished).'),
-  dueDate: z.string().optional().describe('The optional due date of the task in ISO format.'),
 });
+export type SyncToNotionInput = z.infer<typeof SyncToNotionInputSchema>;
 
 const SyncToNotionOutputSchema = z.object({
   success: z.boolean(),
   error: z.string().optional(),
   pageUrl: z.string().optional(),
 });
+export type SyncToNotionOutput = z.infer<typeof SyncToNotionOutputSchema>;
 
-export async function syncToNotion(input: z.infer<typeof SyncToNotionInputSchema>): Promise<z.infer<typeof SyncToNotionOutputSchema>> {
+// This is the main function that the client-side code will call.
+export async function syncToNotion(input: SyncToNotionInput): Promise<SyncToNotionOutput> {
   return syncToNotionFlow(input);
 }
 
+// Define the Genkit flow
 const syncToNotionFlow = ai.defineFlow(
   {
     name: 'syncToNotionFlow',
     inputSchema: SyncToNotionInputSchema,
     outputSchema: SyncToNotionOutputSchema,
   },
-  async (input) => {
-    try {
-      const notion = new Client({ auth: input.notionApiKey });
-      const databaseId = input.notionDatabaseId;
+  async (input: SyncToNotionInput): Promise<SyncToNotionOutput> => {
+    const { note, notionApiKey, notionDatabaseId } = input;
 
-      // Verify database exists and integration has access
+    try {
+      const notion = new Client({ auth: notionApiKey });
+
+      // 1. Verify the database exists and has the required properties
       try {
-        await notion.databases.retrieve({ database_id: databaseId });
-      } catch (e: any) {
-        console.error("Notion API Error - Could not retrieve database:", e.body);
-        if (e.code === 'object_not_found') {
-             return { success: false, error: 'Could not find a Notion database with the provided ID. Please double-check the Database ID in Settings and make sure the integration has been shared with that database.' };
+        const db = await notion.databases.retrieve({ database_id: notionDatabaseId });
+        const props = db.properties;
+        if (!props['Name'] || props['Name'].type !== 'title') {
+            return { success: false, error: "Your Notion database must have a 'Name' property of type 'Title'." };
         }
-        if (e.code === 'unauthorized') {
-            return { success: false, error: 'Notion API Key is invalid or does not have permission. Please check your API Key in Settings.' };
+        if (!props['Status'] || props['Status'].type !== 'select') {
+            return { success: false, error: "Your Notion database must have a 'Status' property of type 'Select'." };
         }
-        return { success: false, error: 'An unexpected error occurred while accessing your Notion database. Please check your console for details.' };
+        if (!props['Due Date'] || props['Due Date'].type !== 'date') {
+            return { success: false, error: "Your Notion database must have a 'Due Date' property of type 'Date'." };
+        }
+      } catch (e) {
+          // Re-throw to be caught by the outer catch block
+          throw e;
+      }
+      
+      // 2. Construct the page to be created in Notion
+      const pageProperties: CreatePageParameters['properties'] = {
+        'Name': {
+          type: 'title',
+          title: [
+            {
+              type: 'text',
+              text: { content: note.title },
+            },
+          ],
+        },
+        'Status': {
+          type: 'select',
+          select: { name: note.status || 'pending' },
+        },
+      };
+
+      if (note.dueDate) {
+        pageProperties['Due Date'] = {
+          type: 'date',
+          date: { start: new Date(note.dueDate).toISOString() },
+        };
       }
 
-      const contentBlocks = input.subtasks?.map(subtask => ({
-        object: 'block' as const,
-        type: 'to_do' as const,
+      const pageChildren = note.subtasks?.map((subtask: any) => ({
+        object: 'block',
+        type: 'to_do',
         to_do: {
-          rich_text: [{ type: 'text' as const, text: { content: subtask.text } }],
+          rich_text: [{ type: 'text', text: { content: subtask.text } }],
           checked: subtask.completed,
         },
       }));
+      
+      // 3. Create the page in Notion
+      const response = await notion.pages.create({
+        parent: { database_id: notionDatabaseId },
+        properties: pageProperties,
+        children: pageChildren,
+      });
 
-      const pageParams: CreatePageParameters = {
-        parent: { database_id: databaseId },
-        properties: {
-          Name: { // Assumes a 'Name' property of type 'title' in the database
-            title: [
-              {
-                text: {
-                  content: input.taskTitle,
-                },
-              },
-            ],
-          },
-          Status: { // Assumes a 'Status' property of type 'select'
-            select: {
-              name: input.status,
-            },
-          },
-          ...(input.dueDate && {
-              'Due Date': { // Assumes a 'Due Date' property of type 'date'
-                  date: {
-                      start: new Date(input.dueDate).toISOString(),
-                  }
-              }
-          })
-        },
-        ...(contentBlocks && { children: contentBlocks }),
-      };
+      return { success: true, pageUrl: response.url };
 
-      const response = await notion.pages.create(pageParams);
+    } catch (error: unknown) {
+      console.error('Detailed Notion API Error:', JSON.stringify(error, null, 2));
 
-      return {
-        success: true,
-        pageUrl: (response as any).url, // Type assertion to access url
-      };
-
-    } catch (error: any) {
-        console.error('Full Notion Sync Error:', JSON.stringify(error, null, 2));
-        const errorMessage = error.body ? JSON.parse(error.body).message : error.message;
-        
-        let userFriendlyError = `Failed to create Notion page. Notion says: "${errorMessage}"`;
-        if (errorMessage.includes("property")) {
-            userFriendlyError += ' Please ensure your database has columns named "Name", "Status", and "Due Date" with the correct property types (Title, Select, and Date).'
+      if (error instanceof APIResponseError) {
+        switch (error.code) {
+          case 'unauthorized':
+            return { success: false, error: 'Authentication failed. Please check your Notion API Key.' };
+          case 'object_not_found':
+            return { success: false, error: 'The Notion database was not found. Please verify the Database ID and ensure the integration is shared with the database.' };
+          case 'validation_error':
+            return { success: false, error: `Notion reported a validation error: ${error.message}. This could be due to missing or misconfigured database properties.` };
+          default:
+            return { success: false, error: `A Notion API error occurred: ${error.message}` };
         }
+      }
 
-        return { 
-            success: false, 
-            error: userFriendlyError 
-        };
+      // Fallback for non-Notion API errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        error: `An unexpected error occurred: ${errorMessage}`,
+      };
     }
   }
 );

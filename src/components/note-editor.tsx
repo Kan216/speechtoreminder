@@ -7,19 +7,27 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/client';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, Check, Send } from 'lucide-react';
+import { Loader2, Trash2, Check, CalendarPlus, CalendarCheck, Share2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Note } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { syncToNotion } from '@/ai/flows/sync-to-notion';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 
-interface NoteEditorProps {
-  note: Note;
-  onNotionSync: () => void;
-  isSyncing: boolean;
-}
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
   let timeout: NodeJS.Timeout;
@@ -32,10 +40,15 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
     });
 };
 
-export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing }: NoteEditorProps) {
+export default function NoteEditor({ note: initialNote }: {note: Note}) {
   const [note, setNote] = useState(initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isNotionDialogOpen, setIsNotionDialogOpen] = useState(false);
+  const [notionApiKey, setNotionApiKey] = useState('');
+  const [notionDatabaseId, setNotionDatabaseId] = useState('');
+
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useAuth();
@@ -43,6 +56,13 @@ export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing 
   useEffect(() => {
     setNote(initialNote);
   }, [initialNote]);
+
+  useEffect(() => {
+    if (isNotionDialogOpen) {
+      setNotionApiKey(localStorage.getItem('notionApiKey') || '');
+      setNotionDatabaseId(localStorage.getItem('notionDatabaseId') || '');
+    }
+  }, [isNotionDialogOpen]);
 
   const getNoteRef = useCallback(() => {
     if (!user) return null;
@@ -71,6 +91,13 @@ export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing 
     setNote(prev => ({ ...prev, title: newTitle }));
     debouncedSave({ title: newTitle });
   };
+
+  const handleDueDateChange = (date: Date | undefined) => {
+    if (!date) return;
+    const newDueDate = date.toISOString();
+    setNote(prev => ({ ...prev, dueDate: newDueDate }));
+    saveNote({ dueDate: newDueDate });
+  }
   
   const handleDeleteNote = async () => {
     const noteRef = getNoteRef();
@@ -117,6 +144,55 @@ export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing 
     toast({ title: 'Task Finished!', description: 'Great job!'});
   }
 
+   const handleNotionSync = async () => {
+    setIsSyncing(true);
+    try {
+      const apiKey = localStorage.getItem('notionApiKey');
+      const dbId = localStorage.getItem('notionDatabaseId');
+
+      if (!apiKey || !dbId) {
+        setIsNotionDialogOpen(true);
+        setIsSyncing(false);
+        return;
+      }
+
+      const result = await syncToNotion({
+        note,
+        notionApiKey: apiKey,
+        notionDatabaseId: dbId,
+      });
+
+      if (result.success) {
+        toast({
+          title: 'Synced to Notion!',
+          description: 'Your task has been successfully sent to Notion.',
+        });
+      } else {
+        toast({
+          title: 'Notion Sync Failed',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'An unknown error occurred during sync.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSaveNotionCredentials = () => {
+    localStorage.setItem('notionApiKey', notionApiKey);
+    localStorage.setItem('notionDatabaseId', notionDatabaseId);
+    toast({ title: 'Credentials Saved', description: 'Your Notion credentials have been saved locally.' });
+    setIsNotionDialogOpen(false);
+    handleNotionSync(); // Retry syncing after saving
+  };
+
   return (
     <div className="flex h-full flex-col p-4 md:p-6 lg:p-8 space-y-6 bg-background">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -133,10 +209,29 @@ export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing 
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
             {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" size="sm" onClick={onNotionSync} disabled={isSyncing}>
-                {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send />}
+            
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                        <CalendarPlus className="mr-2 h-4 w-4" />
+                        {note.dueDate ? format(new Date(note.dueDate), 'PPP') : 'Schedule'}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                    <Calendar
+                        mode="single"
+                        selected={note.dueDate ? new Date(note.dueDate) : undefined}
+                        onSelect={handleDueDateChange}
+                        initialFocus
+                    />
+                </PopoverContent>
+            </Popover>
+
+            <Button variant="outline" size="sm" onClick={handleNotionSync} disabled={isSyncing}>
+                {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Share2 className="mr-2 h-4 w-4" />}
                 Sync to Notion
             </Button>
+            
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>
@@ -214,6 +309,54 @@ export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing 
             </Button>
         </div>
       </div>
+      <Dialog open={isNotionDialogOpen} onOpenChange={setIsNotionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect to Notion</DialogTitle>
+            <DialogDescription>
+              Please provide your Notion API Key and Database ID to sync your tasks. This information will be stored securely in your browser.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="notion-api-key">Notion API Key</Label>
+              <Input
+                id="notion-api-key"
+                type="password"
+                placeholder="secret_..."
+                value={notionApiKey}
+                onChange={(e) => setNotionApiKey(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                You can get this from{' '}
+                <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="underline">
+                  your Notion integrations page
+                </a>
+                .
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notion-database-id">Notion Database ID</Label>
+              <Input
+                id="notion-database-id"
+                placeholder="a1b2c3d4e5f6..."
+                value={notionDatabaseId}
+                onChange={(e) => setNotionDatabaseId(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                This is the 32-character ID from your database URL. (e.g., notion.so/your-workspace/
+                <strong>a1b2c3d4e5f61234567890abcdef123456</strong>?v=...).
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+                <Button type="button" variant="secondary">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleSaveNotionCredentials}>Save and Sync</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
