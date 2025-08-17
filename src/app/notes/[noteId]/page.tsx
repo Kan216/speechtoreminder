@@ -169,12 +169,16 @@ export default function NotePage() {
             friendlyMessage = `Google Calendar Error: ${error.result.error.message}`;
         } else if (error.message) {
             friendlyMessage = error.message;
+        } else if (error.details && error.details.includes('Not a valid origin')) {
+            friendlyMessage = `CONFIGURATION ERROR: Your application's URL (${window.location.origin}) is not authorized. Please go to the Google Cloud Console and add this exact URL to the 'Authorized JavaScript origins' for your OAuth Client ID.`;
         }
+
 
         toast({
             title: 'Sync Error',
             description: friendlyMessage,
-            variant: 'destructive'
+            variant: 'destructive',
+            duration: 15000,
         });
     } finally {
         setIsSyncing(false);
@@ -222,3 +226,5 @@ export default function NotePage() {
     />
   );
 }
+
+    
