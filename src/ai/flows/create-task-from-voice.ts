@@ -19,7 +19,7 @@ const CreateTaskFromVoiceInputSchema = z.object({
     .describe(
       'A recording of the user, as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'
     ),
-   accessToken: z.string().describe("The user's Google OAuth2 access token.")
+   userId: z.string().describe("The user's unique ID.")
 });
 export type CreateTaskFromVoiceInput = z.infer<typeof CreateTaskFromVoiceInputSchema>;
 
@@ -36,7 +36,7 @@ export async function createTaskFromVoice(input: CreateTaskFromVoiceInput): Prom
   if (taskDetails.dueDate) {
     try {
       const eventId = await scheduleEvent({
-        accessToken: input.accessToken,
+        userId: input.userId,
         title: taskDetails.taskTitle,
         startTime: taskDetails.dueDate,
       });

@@ -13,7 +13,7 @@ import { z } from 'genkit';
 import { createOrUpdateCalendarEvent } from '@/lib/actions/calendar';
 
 const ScheduleEventInputSchema = z.object({
-  accessToken: z.string().describe("The user's Google OAuth2 access token."),
+  userId: z.string().describe("The user's unique ID."),
   title: z.string().describe('The title of the calendar event.'),
   startTime: z.string().describe('The start time for the event in ISO 8601 format.'),
   eventId: z.string().optional().describe('The existing event ID if this is an update.'),

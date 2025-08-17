@@ -64,11 +64,10 @@ export default function NotePage() {
     setIsSyncing(true);
 
     try {
-      const accessToken = await user.getIdToken(true);
       const newDueDate = selectedDate.toISOString();
 
       const scheduleEventInput: ScheduleEventInput = {
-        accessToken: accessToken,
+        userId: user.uid,
         title: note.title,
         startTime: newDueDate,
       };
