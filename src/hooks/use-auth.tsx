@@ -3,7 +3,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
-import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 
 export interface Subtask {
   id: string;
@@ -18,6 +18,8 @@ export interface Note {
   subtasks: Subtask[];
   progress: number;
   status: 'pending' | 'inprogress' | 'finished';
+  dueDate?: string;
+  calendarEventId?: string;
 }
 
 type AuthContextType = {
@@ -45,10 +47,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-
+      
       if (user) {
+        // Save user profile information on login
+        const userRef = doc(db, 'users', user.uid);
+        getDoc(userRef).then(docSnap => {
+            if (!docSnap.exists()) {
+                setDoc(userRef, {
+                    displayName: user.displayName,
+                    email: user.email,
+                    photoURL: user.photoURL,
+                    createdAt: serverTimestamp()
+                }, { merge: true });
+            }
+        });
+
+        setUser(user);
+
         setNotesLoading(true);
         const q = query(
           collection(db, 'users', user.uid, 'notes'),
@@ -74,8 +89,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setNotesLoading(false);
         });
         
+        setLoading(false);
         return () => unsubscribeNotes();
       } else {
+        setUser(null);
+        setLoading(false);
         setNotes([]);
         setNotesLoading(false);
       }

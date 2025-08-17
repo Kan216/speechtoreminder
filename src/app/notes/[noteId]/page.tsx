@@ -2,12 +2,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc, Timestamp, collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { doc, getDoc, Timestamp, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect, notFound, useParams } from 'next/navigation';
 import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
+import { scheduleEvent } from '@/ai/flows/schedule-event';
+import { useToast } from '@/hooks/use-toast';
 
 export interface Subtask {
   id: string;
@@ -24,14 +26,18 @@ export interface Note {
   subtasks: Subtask[];
   progress: number;
   status: 'pending' | 'inprogress' | 'finished';
+  dueDate?: string;
+  calendarEventId?: string;
 };
 
 export default function NotePage() {
   const { user, loading: authLoading } = useAuth();
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const params = useParams();
   const noteId = params.noteId as string;
+  const { toast } = useToast();
 
   useEffect(() => {
     if (authLoading) return;
@@ -57,6 +63,8 @@ export default function NotePage() {
           subtasks: data.subtasks || [],
           progress: data.progress || 0,
           status: data.status || 'pending',
+          dueDate: data.dueDate,
+          calendarEventId: data.calendarEventId,
         } as Note);
       } else {
         notFound();
@@ -70,6 +78,45 @@ export default function NotePage() {
 
     return () => unsubscribe();
   }, [user, authLoading, noteId]);
+
+  const handleSyncToCalendar = async () => {
+    if (!note || !user) return;
+    setIsSyncing(true);
+
+    try {
+      const { dueDate } = await new Promise<any>((resolve, reject) => {
+        const newDueDate = prompt("When is this task due?", note.dueDate || new Date().toISOString());
+        if (newDueDate) {
+            resolve({ dueDate: new Date(newDueDate).toISOString() });
+        } else {
+            reject("Invalid date");
+        }
+      });
+      
+      const eventId = await scheduleEvent({
+          userId: user.uid,
+          title: note.title,
+          startTime: dueDate,
+          eventId: note.calendarEventId
+      });
+
+      const noteRef = doc(db, 'users', user.uid, 'notes', note.id);
+      await updateDoc(noteRef, { calendarEventId: eventId, dueDate: dueDate });
+
+      toast({
+          title: 'Successfully synced to calendar!',
+          description: 'The task has been added or updated in your Google Calendar.'
+      });
+    } catch (error: any) {
+        toast({
+            title: 'Failed to sync to calendar',
+            description: error.message || 'There was an issue creating the calendar event.',
+            variant: 'destructive'
+        });
+    } finally {
+        setIsSyncing(false);
+    }
+  };
 
   if (authLoading || loading) {
     return (
@@ -94,5 +141,5 @@ export default function NotePage() {
     )
   }
 
-  return <NoteEditor note={note} />;
+  return <NoteEditor note={note} onSyncToCalendar={handleSyncToCalendar} isSyncing={isSyncing} />;
 }

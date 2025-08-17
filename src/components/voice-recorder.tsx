@@ -88,7 +88,7 @@ export default function VoiceRecorder() {
         setIsRecording(false);
         setIsTranscribing(true);
 
-        if (audioChunksRef.current.length === 0) {
+        if (audioChunksRef.current.length === 0 || !user) {
             setIsTranscribing(false);
             setIsDialogOpen(false);
             return;
@@ -102,31 +102,35 @@ export default function VoiceRecorder() {
             const base64Audio = reader.result as string;
             
             try {
-                const { taskTitle, subtasks } = await createTaskFromVoice({ audioDataUri: base64Audio });
+                const { taskTitle, subtasks, dueDate, calendarEventId } = await createTaskFromVoice({ 
+                    audioDataUri: base64Audio,
+                    userId: user.uid,
+                });
                 
-                if (user) {
-                    const subtasksWithIds = subtasks.map(subtask => ({
-                        id: uuidv4(),
-                        text: subtask,
-                        completed: false
-                    }));
+                const subtasksWithIds = subtasks.map(subtask => ({
+                    id: uuidv4(),
+                    text: subtask,
+                    completed: false
+                }));
 
-                    const newNoteRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
-                        title: taskTitle,
-                        content: '', // No longer used
-                        subtasks: subtasksWithIds,
-                        progress: 0,
-                        status: 'pending',
-                        user_id: user.uid,
-                        created_at: serverTimestamp()
-                    });
+                const newNoteRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
+                    title: taskTitle,
+                    content: '', // No longer used
+                    subtasks: subtasksWithIds,
+                    progress: 0,
+                    status: 'pending',
+                    user_id: user.uid,
+                    created_at: serverTimestamp(),
+                    dueDate: dueDate || null,
+                    calendarEventId: calendarEventId || null,
+                });
 
-                    toast({
-                        title: 'Task Created!',
-                        description: 'Your new task has been created from your voice note.',
-                    });
-                    router.push(`/notes/${newNoteRef.id}`);
-                }
+                toast({
+                    title: 'Task Created!',
+                    description: `Your new task has been created. ${calendarEventId ? 'It has also been added to your calendar.' : ''}`,
+                });
+                router.push(`/notes/${newNoteRef.id}`);
+                
             } catch (error) {
                 console.error('Task creation failed:', error);
                 toast({

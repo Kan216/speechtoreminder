@@ -6,7 +6,9 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signInWithPopup,
-  GoogleAuthProvider
+  GoogleAuthProvider,
+  getAdditionalUserInfo,
+  OAuthCredential,
 } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +17,8 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Separator } from '@/components/ui/separator'
+import { doc, setDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase/client'
 
 export function AuthForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -62,9 +66,21 @@ export function AuthForm() {
   const handleGoogleSignIn = async () => {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
+    // Request permission to create and edit calendar events
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const user = result.user;
+
+      if (credential && credential.accessToken && user) {
+        // Store the access token securely on the server
+         await setDoc(doc(db, 'users', user.uid, 'private', 'google'), {
+            accessToken: credential.accessToken,
+            refreshToken: user.refreshToken // Note: refreshToken might not always be provided
+        }, { merge: true });
+      }
+      
       router.push('/notes');
     } catch (error: any) {
       toast({
