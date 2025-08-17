@@ -78,11 +78,20 @@ export default function SettingsPage() {
         <CardContent className="space-y-6">
           <Alert>
             <Info className="h-4 w-4" />
-            <AlertTitle>Where to find your credentials?</AlertTitle>
+            <AlertTitle>How to Get Your Credentials</AlertTitle>
             <AlertDescription>
-                1. Get your API Key from your <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="underline">Notion Integrations</a> page.<br />
-                2. Create a new database in Notion and copy its ID from the URL.<br />
-                3. Share the database with your Notion integration.
+                <ol className="list-decimal list-inside space-y-2">
+                    <li>Get your API Key from your <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Notion Integrations</a> page.</li>
+                    <li>Create a new database in Notion and **share it** with your integration.</li>
+                    <li>
+                        Copy the **Database ID** from the URL. It's the long string of characters between your workspace name and the question mark.
+                        <div className="mt-2 p-2 rounded-md bg-muted text-muted-foreground text-xs">
+                           <p>https://www.notion.so/your-workspace/<strong className="text-primary">DATABASE_ID</strong>?v=...</p>
+                           <p>Only copy the ID part, not the full URL.</p>
+                        </div>
+                    </li>
+                     <li>Make sure your database has columns named exactly: `Name` (Title), `Status` (Select), and `Due Date` (Date).</li>
+                </ol>
             </AlertDescription>
           </Alert>
 
@@ -100,13 +109,10 @@ export default function SettingsPage() {
             <Label htmlFor="databaseId">Notion Database ID</Label>
             <Input
               id="databaseId"
-              placeholder="Enter your full Notion database URL or just the ID"
+              placeholder="Paste your 32-character Notion Database ID here"
               value={databaseId}
               onChange={(e) => setDatabaseId(e.target.value)}
             />
-             <p className="text-sm text-muted-foreground">
-                You can paste the full URL of your database here. We'll extract the ID automatically.
-            </p>
           </div>
           <Button onClick={handleSave} disabled={isSaving}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

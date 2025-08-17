@@ -8,26 +8,6 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { Client } from '@notionhq/client';
 import type { CreatePageParameters } from '@notionhq/client/build/src/api-endpoints';
-import type { Subtask } from '@/hooks/use-auth';
-
-// Helper function to robustly extract the database ID from a URL or an ID string
-const extractNotionDatabaseId = (idOrUrl: string): string => {
-    try {
-        // If it's a valid URL, parse it
-        if (idOrUrl.startsWith('http')) {
-            const url = new URL(idOrUrl);
-            const pathParts = url.pathname.split('/').filter(p => p);
-            // The ID is usually the last part of the path before any query params
-            const potentialId = pathParts[pathParts.length - 1].split('?')[0];
-            return potentialId.replace(/-/g, '');
-        }
-    } catch (error) {
-        // Not a valid URL, assume it's an ID string
-    }
-    // For an ID string, just remove hyphens
-    return idOrUrl.replace(/-/g, '');
-};
-
 
 const SyncToNotionInputSchema = z.object({
   notionApiKey: z.string().describe('The user\'s Notion API key.'),
@@ -61,7 +41,7 @@ const syncToNotionFlow = ai.defineFlow(
   async (input) => {
     try {
       const notion = new Client({ auth: input.notionApiKey });
-      const databaseId = extractNotionDatabaseId(input.notionDatabaseId);
+      const databaseId = input.notionDatabaseId; // Use the ID directly
 
       // Verify database exists and integration has access
       try {
@@ -74,7 +54,7 @@ const syncToNotionFlow = ai.defineFlow(
         if (e.code === 'unauthorized') {
             return { success: false, error: 'Notion API Key is invalid or does not have permission. Please check your API Key in Settings.' };
         }
-        return { success: false, error: 'An unexpected error occurred while accessing your Notion database.' };
+        return { success: false, error: 'An unexpected error occurred while accessing your Notion database. Please check your console for details.' };
       }
 
       const contentBlocks = input.subtasks?.map(subtask => ({
@@ -124,9 +104,15 @@ const syncToNotionFlow = ai.defineFlow(
     } catch (error: any) {
         console.error('Full Notion Sync Error:', JSON.stringify(error, null, 2));
         const errorMessage = error.body ? JSON.parse(error.body).message : error.message;
+        
+        let userFriendlyError = `Failed to create Notion page. Notion says: "${errorMessage}"`;
+        if (errorMessage.includes("property")) {
+            userFriendlyError += ' Please ensure your database has columns named "Name", "Status", and "Due Date" with the correct property types (Title, Select, and Date).'
+        }
+
         return { 
             success: false, 
-            error: `Failed to create Notion page. Notion says: "${errorMessage}"` 
+            error: userFriendlyError 
         };
     }
   }
