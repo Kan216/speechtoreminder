@@ -47,7 +47,10 @@ const syncToNotionFlow = ai.defineFlow(
     const { note, notionApiKey, notionDatabaseId } = input;
 
     try {
-      const notion = new Client({ auth: notionApiKey });
+      const notion = new Client({ 
+          auth: notionApiKey,
+          baseUrl: 'https://api.notion.com/v1',
+      });
 
       // 1. Verify the database exists and has the required properties
       try {
