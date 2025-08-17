@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { redirect, notFound, useParams } from 'next/navigation';
 import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
-import { scheduleEvent } from '@/ai/flows/schedule-event';
+import { scheduleEvent, ScheduleEventInput } from '@/ai/flows/schedule-event';
 import { useToast } from '@/hooks/use-toast';
 import { Note } from '@/hooks/use-auth';
 import { DateTimePickerDialog } from '@/components/datetime-picker-dialog';
@@ -66,12 +66,17 @@ export default function NotePage() {
     const newDueDate = selectedDate.toISOString();
 
     try {
-      const eventId = await scheduleEvent({
-          userId: user.uid,
-          title: note.title,
-          startTime: newDueDate,
-          eventId: note.calendarEventId
-      });
+      const scheduleEventInput: ScheduleEventInput = {
+        userId: user.uid,
+        title: note.title,
+        startTime: newDueDate,
+      };
+
+      if (note.calendarEventId) {
+        scheduleEventInput.eventId = note.calendarEventId;
+      }
+      
+      const eventId = await scheduleEvent(scheduleEventInput);
 
       const noteRef = doc(db, 'users', user.uid, 'notes', note.id);
       await updateDoc(noteRef, { calendarEventId: eventId, dueDate: newDueDate });
