@@ -26,7 +26,7 @@ import type { User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
 import { signOut } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -42,6 +42,7 @@ interface MainSidebarProps {
 export default function MainSidebar({ user, notes, notesLoading, notesError }: MainSidebarProps) {
   const router = useRouter();
   const params = useParams();
+  const pathname = usePathname();
   const noteId = params.noteId as string;
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
@@ -94,7 +95,7 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
       <SidebarContent className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Button asChild variant="ghost" className="w-full justify-start" data-active={!noteId}>
+            <Button asChild variant="ghost" className="w-full justify-start" data-active={pathname === '/notes'}>
               <Link href="/notes">
                 <Home className="mr-2 h-4 w-4" />
                 Dashboard
@@ -146,9 +147,11 @@ export default function MainSidebar({ user, notes, notesLoading, notesError }: M
         <SidebarSeparator />
         <SidebarMenu>
             <SidebarMenuItem>
-                <Button variant="ghost" className="w-full justify-start">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
+                <Button asChild variant="ghost" className="w-full justify-start" data-active={pathname === '/settings'}>
+                    <Link href="/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                    </Link>
                 </Button>
             </SidebarMenuItem>
             <SidebarMenuItem>

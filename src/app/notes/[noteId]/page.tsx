@@ -2,10 +2,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/hooks/use-auth';
-import { redirect, notFound, useParams } from 'next/navigation';
+import { redirect, notFound, useParams, useRouter } from 'next/navigation';
 import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
 import { Note } from '@/hooks/use-auth';
@@ -19,6 +19,7 @@ export default function NotePage() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const params = useParams();
+  const router = useRouter();
   const noteId = params.noteId as string;
   const { toast } = useToast();
 
@@ -62,13 +63,30 @@ export default function NotePage() {
   }, [user, authLoading, noteId, getNoteRef]);
 
   const handleNotionSync = async () => {
-    if (!note) return;
+    if (!note || !user) return;
+
+    // First check if user has configured Notion
+    const userRef = doc(db, 'users', user.uid);
+    const userDoc = await getDoc(userRef);
+    const userData = userDoc.data();
+
+    if (!userData?.notionApiKey || !userData?.notionDatabaseId) {
+        toast({
+            title: 'Notion Not Configured',
+            description: 'Please configure your Notion API Key and Database ID in the Settings page before syncing.',
+            variant: 'destructive',
+            duration: 10000,
+        });
+        router.push('/settings');
+        return;
+    }
 
     setIsSyncing(true);
     try {
       const result = await syncToNotion({
         title: note.title,
-        subtasks: note.subtasks.map(st => ({ text: st.text, completed: st.completed }))
+        subtasks: note.subtasks.map(st => ({ text: st.text, completed: st.completed })),
+        userId: user.uid,
       });
 
       if (result.success) {
@@ -77,7 +95,7 @@ export default function NotePage() {
           description: `Page created successfully.`,
         });
       } else {
-        throw new Error(result.error || 'An unknown error occurred.');
+        throw new Error(result.error || 'An unknown error occurred during sync.');
       }
     } catch (error: any) {
       console.error('Notion Sync Error:', error);

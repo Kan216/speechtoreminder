@@ -2,11 +2,13 @@
 'use server';
 
 /**
- * @fileOverview A flow to sync a task and its subtasks to a Notion database.
+ * @fileOverview A flow to sync a task and its subtasks to a user's Notion database.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/client';
 
 const SyncToNotionInputSchema = z.object({
   title: z.string().describe('The title of the task.'),
@@ -14,6 +16,7 @@ const SyncToNotionInputSchema = z.object({
     text: z.string(),
     completed: z.boolean(),
   })).describe('A list of subtasks.'),
+  userId: z.string().describe("The user's unique ID."),
 });
 
 export type SyncToNotionInput = z.infer<typeof SyncToNotionInputSchema>;
@@ -37,14 +40,31 @@ const syncToNotionFlow = ai.defineFlow(
     outputSchema: SyncToNotionOutputSchema,
   },
   async (input) => {
-    const notionApiKey = process.env.NOTION_API_KEY;
-    const notionDatabaseId = process.env.NOTION_DATABASE_ID;
+    
+    // Get user-specific Notion credentials from Firestore
+    let notionApiKey: string | undefined;
+    let notionDatabaseId: string | undefined;
 
-    if (!notionApiKey || notionApiKey === 'YOUR_NOTION_API_KEY') {
-      return { success: false, error: 'Notion API Key is not configured. Please set NOTION_API_KEY in your .env.local file.' };
+    try {
+        const userRef = doc(db, 'users', input.userId);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            notionApiKey = userData.notionApiKey;
+            notionDatabaseId = userData.notionDatabaseId;
+        } else {
+            return { success: false, error: 'User profile not found.' };
+        }
+    } catch(err: any) {
+        return { success: false, error: 'Failed to retrieve user credentials from Firestore.' };
     }
-    if (!notionDatabaseId || notionDatabaseId === 'YOUR_NOTION_DATABASE_ID') {
-        return { success: false, error: 'Notion Database ID is not configured. Please set NOTION_DATABASE_ID in your .env.local file.' };
+
+
+    if (!notionApiKey) {
+      return { success: false, error: 'Notion API Key is not configured for this user.' };
+    }
+    if (!notionDatabaseId) {
+        return { success: false, error: 'Notion Database ID is not configured for this user.' };
     }
 
     try {
@@ -89,7 +109,11 @@ const syncToNotionFlow = ai.defineFlow(
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Notion API Error:', errorData);
-        throw new Error(errorData.message || 'Failed to create Notion page.');
+        let errorMessage = 'Failed to create Notion page.';
+        if (errorData.message) {
+            errorMessage += ` Notion says: "${errorData.message}"`;
+        }
+        throw new Error(errorMessage);
       }
 
       return { success: true };

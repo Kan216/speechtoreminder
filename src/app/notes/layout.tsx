@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/sidebar';
 
 import { Loader2 } from 'lucide-react';
-import { useNotifications } from '@/hooks/use-notifications';
+
 
 export default function NotesLayout({
   children,
@@ -18,8 +18,7 @@ export default function NotesLayout({
   children: React.ReactNode;
 }) {
   const { user, loading, notes, notesLoading, notesError } = useAuth();
-  useNotifications(notes);
-  
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
