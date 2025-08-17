@@ -14,7 +14,7 @@ const ScheduleEventInputSchema = z.object({
 });
 type ScheduleEventInput = z.infer<typeof ScheduleEventInputSchema>;
 
-async function getAccessToken(userId: string): Promise<string> {
+async function getTokens(userId: string): Promise<{ accessToken: string; refreshToken?: string }> {
   const tokenDocRef = doc(db, 'users', userId, 'private', 'google');
   const tokenDoc = await getDoc(tokenDocRef);
   if (!tokenDoc.exists()) {
@@ -24,16 +24,19 @@ async function getAccessToken(userId: string): Promise<string> {
   if (!data.accessToken) {
      throw new Error('Access token not found for user.');
   }
-  return data.accessToken;
+  return { accessToken: data.accessToken, refreshToken: data.refreshToken };
 }
 
 export async function createOrUpdateCalendarEvent(input: ScheduleEventInput): Promise<string> {
     const { userId, title, startTime, eventId } = ScheduleEventInputSchema.parse(input);
     
-    const accessToken = await getAccessToken(userId);
+    const { accessToken, refreshToken } = await getTokens(userId);
     
     const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: accessToken });
+    oauth2Client.setCredentials({ 
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     
