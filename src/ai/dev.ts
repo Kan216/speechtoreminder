@@ -1,1 +1,5 @@
-// Flows will be imported for their side effects in this file.
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/format-note.ts';
+import '@/ai/flows/transcribe-voice-note.ts';
