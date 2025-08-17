@@ -21,6 +21,15 @@ export default function VoiceRecorder() {
     const { toast } = useToast();
 
     const startRecording = async () => {
+        if (!user) {
+            toast({
+                title: 'Authentication Required',
+                description: 'You must be signed in to record a voice note.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const recorder = new MediaRecorder(stream);
@@ -113,7 +122,7 @@ export default function VoiceRecorder() {
 
     return (
         <div>
-            <Button onClick={handleRecordingToggle} disabled={isTranscribing || !user} size="lg" className="rounded-full w-24 h-24 shadow-lg transition-all hover:scale-105 active:scale-95">
+            <Button onClick={handleRecordingToggle} disabled={isTranscribing} size="lg" className="rounded-full w-24 h-24 shadow-lg transition-all hover:scale-105 active:scale-95">
                 {isRecording ? (
                     <StopCircle className="h-8 w-8" />
                 ) : isTranscribing ? (

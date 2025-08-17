@@ -57,7 +57,12 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
     try {
         await updateDoc(noteRef, updatedNote);
     } catch(error: any) {
-        toast({ title: 'Error saving note', description: error.message, variant: 'destructive' });
+        console.error("Error saving note:", error);
+        let description = error.message;
+        if (error.code === 'permission-denied') {
+            description = "You don't have permission. Please check your Firestore security rules."
+        }
+        toast({ title: 'Error saving note', description, variant: 'destructive' });
     } finally {
         setIsSaving(false);
     }
