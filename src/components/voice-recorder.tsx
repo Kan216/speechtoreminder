@@ -102,7 +102,7 @@ export default function VoiceRecorder() {
             const base64Audio = reader.result as string;
             
             try {
-                const { taskTitle, subtasks, dueDate } = await createTaskFromVoice({ 
+                const { taskTitle, subtasks } = await createTaskFromVoice({ 
                     audioDataUri: base64Audio,
                     userId: user.uid,
                 });
@@ -115,14 +115,11 @@ export default function VoiceRecorder() {
 
                 const newNoteRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
                     title: taskTitle,
-                    content: '', // No longer used
                     subtasks: subtasksWithIds,
                     progress: 0,
                     status: 'pending',
                     user_id: user.uid,
                     created_at: serverTimestamp(),
-                    dueDate: dueDate || null,
-                    calendarEventId: null,
                 });
 
                 toast({

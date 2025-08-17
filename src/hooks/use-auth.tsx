@@ -19,8 +19,6 @@ export interface Note {
   subtasks: Subtask[];
   progress: number;
   status: 'pending' | 'inprogress' | 'finished';
-  dueDate?: string;
-  calendarEventId?: string;
 }
 
 type AuthContextType = {
@@ -50,7 +48,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       
       if (user) {
-        // Save or update user profile information on login
         const userRef = doc(db, 'users', user.uid);
         try {
             const docSnap = await getDoc(userRef);

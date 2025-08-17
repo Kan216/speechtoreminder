@@ -25,7 +25,6 @@ export type CreateTaskFromVoiceInput = z.infer<typeof CreateTaskFromVoiceInputSc
 const CreateTaskFromVoiceOutputSchema = z.object({
   taskTitle: z.string().describe('A concise title for the task.'),
   subtasks: z.array(z.string()).describe('A list of sub-tasks or to-do items derived from the note.'),
-  dueDate: z.string().optional().describe('The due date for the task in ISO 8601 format (e.g., YYYY-MM-DDTHH:mm:ss.sssZ) if mentioned. If not mentioned, this should be omitted.')
 });
 export type CreateTaskFromVoiceOutput = z.infer<typeof CreateTaskFromVoiceOutputSchema>;
 
@@ -44,9 +43,8 @@ const prompt = ai.definePrompt({
   1.  Create a clear and concise title for the overall task.
   2.  Identify the individual action items or sub-tasks from the transcription.
   3.  Format these action items into a simple list of strings.
-  4.  If a date or time is mentioned (e.g., "tomorrow at 3pm", "next Friday", "on June 1st"), determine the exact date and time and provide it in the 'dueDate' field in strict ISO 8601 format. The current date is ${new Date().toISOString()}.
 
-  Transcribe the following audio and convert it into a task title, a list of subtasks, and an optional due date.
+  Transcribe the following audio and convert it into a task title and a list of subtasks.
   
   Audio: {{media url=audioDataUri}}`,
 });

@@ -7,19 +7,17 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/client';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, Check, CalendarClock } from 'lucide-react';
+import { Loader2, Trash2, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Note } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { format } from 'date-fns';
-import { DateTimePickerDialog } from './datetime-picker-dialog';
 
 interface NoteEditorProps {
   note: Note;
-  onDateTimeSubmit: (date?: Date) => void;
+  onNotionSync: () => void;
   isSyncing: boolean;
 }
 
@@ -34,11 +32,10 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
     });
 };
 
-export default function NoteEditor({ note: initialNote, onDateTimeSubmit, isSyncing }: NoteEditorProps) {
+export default function NoteEditor({ note: initialNote, onNotionSync, isSyncing }: NoteEditorProps) {
   const [note, setNote] = useState(initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isDateTimePickerOpen, setIsDateTimePickerOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useAuth();
@@ -120,21 +117,18 @@ export default function NoteEditor({ note: initialNote, onDateTimeSubmit, isSync
     toast({ title: 'Task Finished!', description: 'Great job!'});
   }
 
-  const handleDateTimeSubmit = async (date?: Date) => {
-    setIsDateTimePickerOpen(false);
-    onDateTimeSubmit(date);
-  }
+  const NotionIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className="h-4 w-4 mr-2">
+      <path fill="currentColor" d="M219.72 40H52v176h167.72L216.59 40zM68 56h16v144H68zm24 144V56h16v144zm40-144h16v144h-16zm56 144V56h16v144h-16zm-32-144h16v144h-16zM36 216V40H20v184h184v-16H36z"/>
+    </svg>
+  );
 
   return (
-    <>
     <div className="flex h-full flex-col p-4 md:p-6 lg:p-8 space-y-6 bg-background">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className='flex items-center gap-2 text-sm text-muted-foreground'>
             <p>Task</p>
-            {note.dueDate && (
-               <p className='font-semibold text-primary'>{format(new Date(note.dueDate), "PPP p")}</p>
-            )}
           </div>
           <Input
             value={note.title || ''}
@@ -145,9 +139,9 @@ export default function NoteEditor({ note: initialNote, onDateTimeSubmit, isSync
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
             {(isSaving || isSyncing) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" size="sm" onClick={() => setIsDateTimePickerOpen(true)} disabled={isSyncing}>
-                <CalendarClock className="mr-2 h-4 w-4" />
-                {note.dueDate ? 'Reschedule' : 'Schedule'}
+            <Button variant="outline" size="sm" onClick={onNotionSync} disabled={isSyncing}>
+                <NotionIcon />
+                Sync to Notion
             </Button>
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
@@ -227,12 +221,5 @@ export default function NoteEditor({ note: initialNote, onDateTimeSubmit, isSync
         </div>
       </div>
     </div>
-    <DateTimePickerDialog
-        isOpen={isDateTimePickerOpen}
-        onOpenChange={setIsDateTimePickerOpen}
-        initialDate={note.dueDate ? new Date(note.dueDate) : new Date()}
-        onSubmit={handleDateTimeSubmit}
-    />
-    </>
   );
 }
