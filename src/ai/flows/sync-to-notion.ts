@@ -33,6 +33,35 @@ export async function syncToNotion(input: SyncToNotionInput): Promise<SyncToNoti
   return syncToNotionFlow(input);
 }
 
+/**
+ * Extracts a Notion Database ID from a full Notion URL.
+ * @param urlOrId The potential URL or the raw ID.
+ * @returns The extracted Database ID.
+ */
+function extractNotionDatabaseId(urlOrId: string): string {
+    if (!urlOrId.startsWith('https://')) {
+        return urlOrId; // It's likely already an ID
+    }
+    try {
+        const url = new URL(urlOrId);
+        const pathParts = url.pathname.split('/');
+        // The ID is usually the last part of the path, before the query string.
+        const id = pathParts.pop()?.split('-').pop();
+        if (id && id.length === 32) {
+             // A more specific regex to find the 32-character ID in the pathname
+            const match = url.pathname.match(/([a-f0-9]{32})/);
+            if (match) {
+                return match[1];
+            }
+        }
+        return id || urlOrId; // Fallback to the parsed segment or original string
+    } catch (e) {
+        // Not a valid URL, so treat it as an ID.
+        return urlOrId;
+    }
+}
+
+
 const syncToNotionFlow = ai.defineFlow(
   {
     name: 'syncToNotionFlow',
@@ -55,6 +84,8 @@ const syncToNotionFlow = ai.defineFlow(
         },
       }));
       
+      const databaseId = extractNotionDatabaseId(input.notionDatabaseId);
+
       const response = await fetch('https://api.notion.com/v1/pages', {
         method: 'POST',
         headers: {
@@ -63,7 +94,7 @@ const syncToNotionFlow = ai.defineFlow(
           'Notion-Version': '2022-06-28',
         },
         body: JSON.stringify({
-          parent: { database_id: input.notionDatabaseId },
+          parent: { database_id: databaseId },
           properties: {
             Name: {
               title: [
