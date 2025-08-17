@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState } from 'react'
@@ -75,10 +76,28 @@ export function AuthForm() {
 
       if (credential && credential.accessToken && user) {
         // Store the access token securely on the server
-         await setDoc(doc(db, 'users', user.uid, 'private', 'google'), {
-            accessToken: credential.accessToken,
-            refreshToken: user.refreshToken // Note: refreshToken might not always be provided
-        }, { merge: true });
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'private', 'google'), {
+              accessToken: credential.accessToken,
+              refreshToken: user.refreshToken // Note: refreshToken might not always be provided
+          }, { merge: true });
+        } catch (error: any) {
+            if (error.code === 'permission-denied') {
+                toast({
+                    title: 'Firestore Permission Denied',
+                    description: "Please update your security rules to allow writing to the 'private' collection for your user.",
+                    variant: 'destructive',
+                });
+            } else {
+                 toast({
+                    title: 'Error saving access token',
+                    description: error.message,
+                    variant: 'destructive',
+                });
+            }
+            setIsSubmitting(false);
+            return;
+        }
       }
       
       router.push('/notes');
