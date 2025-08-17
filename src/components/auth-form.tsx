@@ -67,20 +67,35 @@ export function AuthForm() {
   const handleGoogleSignIn = async () => {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
-    // Request permission to create and edit calendar events
+    // Request permission to create and edit calendar events & ensure a refresh token is provided
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
+    provider.setCustomParameters({
+      access_type: 'offline',
+      prompt: 'consent' // This will re-prompt for consent, which is necessary to get a refresh token
+    });
+
     try {
       const result = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const user = result.user;
 
-      if (credential && credential.accessToken && user) {
-        // Store the access token securely on the server
+      if (credential && user) {
+        // Store the access token and refresh token securely on the server
         try {
-          await setDoc(doc(db, 'users', user.uid, 'private', 'google'), {
-              accessToken: credential.accessToken,
-              refreshToken: user.refreshToken // Note: refreshToken might not always be provided
-          }, { merge: true });
+          const docData: { accessToken: string; refreshToken?: string } = {
+            accessToken: credential.accessToken!,
+          };
+
+          // The OAuth credential should contain the refresh token.
+          // Note: A refresh token is only provided on the first authorization.
+          // The `prompt: 'consent'` parameter helps ensure it's provided again.
+          const additionalUserInfo = getAdditionalUserInfo(result);
+          if (result.user.refreshToken) {
+            docData.refreshToken = result.user.refreshToken;
+          }
+
+          await setDoc(doc(db, 'users', user.uid, 'private', 'google'), docData, { merge: true });
+
         } catch (error: any) {
             if (error.code === 'permission-denied') {
                 toast({
