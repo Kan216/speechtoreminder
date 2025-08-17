@@ -14,7 +14,6 @@ import { Note } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { createEvent } from 'ics';
 
 interface NoteEditorProps {
   note: Note;
@@ -117,7 +116,7 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
     toast({ title: 'Task Finished!', description: 'Great job!'});
   }
 
-  const handleAddToCalendar = () => {
+  const handleAddToCalendar = async () => {
     if (!note.dueDate) {
       toast({
         title: 'Task not scheduled',
@@ -127,11 +126,13 @@ export default function NoteEditor({ note: initialNote, onSchedule }: NoteEditor
       return;
     }
 
+    const { createEvent } = await import('ics');
+
     const dueDate = new Date(note.dueDate);
     const event = {
       title: note.title,
       description: note.subtasks?.map(s => `- ${s.text}`).join('\n') || 'No subtasks.',
-      start: [dueDate.getUTCFullYear(), dueDate.getUTCMonth() + 1, dueDate.getUTCDate(), dueDate.getUTCHours(), dueDate.getUTCMinutes()],
+      start: [dueDate.getUTCFullYear(), dueDate.getUTCMonth() + 1, dueDate.getUTCDate(), dueDate.getUTCHours(), dueDate.getUTCMinutes()] as [number, number, number, number, number],
       duration: { hours: 1 },
     };
 
