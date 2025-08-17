@@ -45,6 +45,7 @@ interface MainSidebarProps {
 export default function MainSidebar({ user, notes, notesLoading }: MainSidebarProps) {
   const router = useRouter();
   const params = useParams();
+  const noteId = params.noteId as string;
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
@@ -118,7 +119,7 @@ export default function MainSidebar({ user, notes, notesLoading }: MainSidebarPr
             ) : (
                 notes.map((note) => (
                 <SidebarMenuItem key={note.id}>
-                    <Button asChild variant="ghost" className="w-full justify-start" data-active={params.noteId === note.id}>
+                    <Button asChild variant="ghost" className="w-full justify-start" data-active={noteId === note.id}>
                         <Link href={`/notes/${note.id}`}>
                             <FileText className="mr-2 h-4 w-4" />
                             <span className="truncate">{note.title || 'Untitled Note'}</span>

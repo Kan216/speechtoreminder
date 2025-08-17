@@ -20,6 +20,7 @@ export default function NotePage({ params }: { params: { noteId: string } }) {
   const { user, loading: authLoading } = useAuth();
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
+  const noteId = params.noteId;
 
   useEffect(() => {
     if (authLoading) return;
@@ -30,7 +31,7 @@ export default function NotePage({ params }: { params: { noteId: string } }) {
 
     const fetchNote = async () => {
       try {
-        const noteRef = doc(db, 'users', user.uid, 'notes', params.noteId);
+        const noteRef = doc(db, 'users', user.uid, 'notes', noteId);
         const noteSnap = await getDoc(noteRef);
 
         if (noteSnap.exists()) {
@@ -47,7 +48,7 @@ export default function NotePage({ params }: { params: { noteId: string } }) {
     };
 
     fetchNote();
-  }, [user, authLoading, params.noteId]);
+  }, [user, authLoading, noteId]);
 
   if (authLoading || loading) {
     return (
