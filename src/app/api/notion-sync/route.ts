@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
             ],
         },
         'Status': {
-            select: { name: note.status || 'pending' },
+            status: { name: note.status || 'pending' },
         },
     };
 
