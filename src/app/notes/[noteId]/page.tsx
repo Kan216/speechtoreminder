@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/hooks/use-auth';
-import { redirect, notFound } from 'next/navigation';
+import { redirect, notFound, useParams } from 'next/navigation';
 import NoteEditor from '@/components/note-editor';
 import { Loader2 } from 'lucide-react';
 
@@ -16,11 +16,12 @@ type Note = {
   created_at: Timestamp;
 };
 
-export default function NotePage({ params }: { params: { noteId: string } }) {
+export default function NotePage() {
   const { user, loading: authLoading } = useAuth();
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
-  const noteId = params.noteId;
+  const params = useParams();
+  const noteId = params.noteId as string;
 
   useEffect(() => {
     if (authLoading) return;
@@ -30,6 +31,7 @@ export default function NotePage({ params }: { params: { noteId: string } }) {
     }
 
     const fetchNote = async () => {
+      if (!noteId) return;
       try {
         const noteRef = doc(db, 'users', user.uid, 'notes', noteId);
         const noteSnap = await getDoc(noteRef);
@@ -59,7 +61,12 @@ export default function NotePage({ params }: { params: { noteId: string } }) {
   }
 
   if (!note) {
-    return notFound();
+    // This can briefly happen while note is loading, so we'll show a loader
+    return (
+       <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
   }
 
   return <NoteEditor note={note} />;
