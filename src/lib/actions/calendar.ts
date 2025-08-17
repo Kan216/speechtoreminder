@@ -32,14 +32,28 @@ async function getOauth2Client(userId: string) {
     const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        // This should match the redirect URI in your Google Cloud Console
-        typeof window !== 'undefined' ? `${window.location.origin}` : undefined
+        // This MUST match the redirect URI in your Google Cloud Console for the OAuth Client
+        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+          ? `https://${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}`
+          : 'http://localhost:9002' 
     );
 
     oauth2Client.setCredentials({
         access_token: tokenData.accessToken,
         refresh_token: tokenData.refreshToken,
     });
+    
+    // Test if the token is expired, and refresh if it is.
+    const isTokenExpired = oauth2Client.isTokenExpiring();
+    if(isTokenExpired) {
+        try {
+            const { credentials } = await oauth2Client.refreshAccessToken();
+            oauth2Client.setCredentials(credentials);
+        } catch (error: any) {
+            console.error('Error refreshing access token:', error);
+            throw new Error('Could not refresh access token. Please sign out and sign back in.');
+        }
+    }
 
     return oauth2Client;
 }
@@ -88,18 +102,17 @@ export async function createOrUpdateCalendarEvent(input: ScheduleEventInput): Pr
         // Handle errors from the Google API specifically
         if (error.response?.data?.error) {
             const googleError = error.response.data.error;
-            if (googleError.code === 403) {
-                 if (googleError.message.includes('cannot be used')) {
+            if (googleError.code === 403 || googleError.code === 401) {
+                 if (googleError.message && googleError.message.includes('cannot be used')) {
                      friendlyMessage = "The Google Calendar API is not enabled or is misconfigured. Please enable it in the Google Cloud Console.";
-                 } else {
+                 } else if (googleError.message) {
                      friendlyMessage = `Google Calendar Permission Error: ${googleError.message}`;
+                 } else {
+                     friendlyMessage = "Missing or insufficient permissions."
                  }
-            } else if (googleError.code === 401 || googleError.error_description?.includes('expired')) {
-                friendlyMessage = "Your Google authentication has expired. Please sign out and sign back in to reconnect your calendar.";
-            } else if (googleError.code === 400 && (googleError.error === 'invalid_grant' || googleError.error_description?.includes('Malformed auth'))) {
+            } else if (googleError.error === 'invalid_grant') {
                  friendlyMessage = "Your Google authentication is invalid. Please sign out and sign back in to reconnect your calendar.";
-            }
-             else {
+            } else {
                 friendlyMessage = `Google Calendar Error: ${googleError.message || googleError.error_description}`;
             }
         } else if (error.message) {

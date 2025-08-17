@@ -138,7 +138,7 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
             {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" onClick={onSyncToCalendar} disabled={isSyncing}>
+            <Button variant="outline" onClick={onSyncToCalendar}>
                 {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarIcon className="mr-2 h-4 w-4" />}
                 {note.calendarEventId ? 'Resync' : 'Sync'} Calendar
             </Button>
