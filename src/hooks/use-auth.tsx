@@ -4,7 +4,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
-import { collection, query, orderBy, onSnapshot, Timestamp, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 export interface Subtask {
   id: string;
@@ -13,7 +13,7 @@ export interface Subtask {
 }
 
 export interface Note {
-  id: string;
+  id:string;
   title: string;
   created_at: Timestamp;
   subtasks: Subtask[];
@@ -47,26 +47,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [notesError, setNotesError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       
       if (user) {
-        // Save user profile information on login
+        // Save or update user profile information on login
         const userRef = doc(db, 'users', user.uid);
-        getDoc(userRef).then(docSnap => {
+        try {
+            const docSnap = await getDoc(userRef);
+            const userProfileData = {
+                displayName: user.displayName,
+                email: user.email,
+                photoURL: user.photoURL,
+            };
             if (!docSnap.exists()) {
-                setDoc(userRef, {
-                    displayName: user.displayName,
-                    email: user.email,
-                    photoURL: user.photoURL,
+                await setDoc(userRef, {
+                    ...userProfileData,
                     createdAt: serverTimestamp()
-                }, { merge: true }).catch(error => {
-                     if (error.code === 'permission-denied') {
-                        console.error("Firestore Error: Do not have permission to create user profile. Please check security rules.", error);
-                        setNotesError("Permission Error: Could not create your user profile. Please update Firestore security rules.");
-                     }
                 });
+            } else {
+                await updateDoc(userRef, userProfileData);
             }
-        });
+        } catch (error: any) {
+            console.error("Firestore Error: Could not create or update user profile.", error);
+            if (error.code === 'permission-denied') {
+                setNotesError("Permission Error: Could not save your user profile. Please update Firestore security rules.");
+            }
+        }
 
         setUser(user);
 
@@ -88,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         (error) => {
           console.error("Error fetching notes:", error);
           if(error.code === 'permission-denied') {
-              setNotesError("Permission Denied: Please check your Firestore security rules.");
+              setNotesError("Permission Denied: Please check your Firestore security rules to allow listing notes.");
           } else {
               setNotesError(error.message);
           }
