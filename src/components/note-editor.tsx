@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -58,9 +59,11 @@ export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
         await updateDoc(noteRef, updatedNote);
     } catch(error: any) {
         console.error("Error saving note:", error);
-        let description = error.message;
-        if (error.code === 'permission-denied') {
-            description = "You don't have permission. Please check your Firestore security rules."
+        let description = "An unknown error occurred.";
+        if (error.code === 'permission-denied' || error.message.includes('offline')) {
+            description = "You don't have permission to save this note. Please check your Firestore security rules."
+        } else {
+            description = error.message;
         }
         toast({ title: 'Error saving note', description, variant: 'destructive' });
     } finally {

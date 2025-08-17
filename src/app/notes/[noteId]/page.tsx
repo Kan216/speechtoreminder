@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -43,7 +44,8 @@ export default function NotePage() {
         }
       } catch (error) {
         console.error('Error fetching note:', error);
-        notFound();
+        // This will show a more specific error in the UI if fetching fails
+        setNote(null);
       } finally {
         setLoading(false);
       }
@@ -61,10 +63,16 @@ export default function NotePage() {
   }
 
   if (!note) {
-    // This can briefly happen while note is loading, so we'll show a loader
     return (
-       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex h-full flex-col items-center justify-center p-4 text-center">
+         <h2 className="text-xl font-semibold">Error Loading Note</h2>
+         <p className="mt-2 text-muted-foreground">
+            Could not load the note. This might be because of a network issue, <br />
+            or you may not have permission to view it.
+         </p>
+         <p className="mt-2 text-sm text-muted-foreground">
+            Please check your Firestore security rules in the Firebase Console.
+         </p>
       </div>
     )
   }
