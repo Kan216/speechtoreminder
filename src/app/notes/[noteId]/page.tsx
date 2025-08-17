@@ -53,7 +53,7 @@ export default function NotePage() {
     });
 
     return () => unsubscribe();
-  }, [user, authLoading, params.noteId]);
+  }, [user, authLoading, noteId]);
 
   const handleDateTimeSubmit = async (selectedDate: Date | undefined) => {
     if (!note || !user || !selectedDate) {
@@ -63,11 +63,12 @@ export default function NotePage() {
     setIsDateTimePickerOpen(false);
     setIsSyncing(true);
 
-    const newDueDate = selectedDate.toISOString();
-
     try {
+      const accessToken = await user.getIdToken(true);
+      const newDueDate = selectedDate.toISOString();
+
       const scheduleEventInput: ScheduleEventInput = {
-        userId: user.uid,
+        accessToken: accessToken,
         title: note.title,
         startTime: newDueDate,
       };

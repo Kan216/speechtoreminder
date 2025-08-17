@@ -102,9 +102,10 @@ export default function VoiceRecorder() {
             const base64Audio = reader.result as string;
             
             try {
+                const accessToken = await user.getIdToken(true);
                 const { taskTitle, subtasks, dueDate, calendarEventId } = await createTaskFromVoice({ 
                     audioDataUri: base64Audio,
-                    userId: user.uid,
+                    accessToken,
                 });
                 
                 const subtasksWithIds = subtasks.map(subtask => ({
