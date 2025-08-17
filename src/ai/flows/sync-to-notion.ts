@@ -39,26 +39,15 @@ export async function syncToNotion(input: SyncToNotionInput): Promise<SyncToNoti
  * @returns The extracted and cleaned Database ID.
  */
 function extractNotionDatabaseId(urlOrId: string): string {
-    let id = urlOrId;
-    // If it's a URL, try to parse it
-    if (id.startsWith('https://')) {
-        try {
-            const url = new URL(id);
-            const pathParts = url.pathname.split('/');
-            // The ID is often the last part, before any query params
-            id = pathParts[pathParts.length - 1] || '';
-            // It might also be in the format '.../path-with-id-123456?v=...'
-            const idMatch = id.match(/([a-f0-9]{32})/);
-             if (idMatch) {
-                return idMatch[1];
-            }
-        } catch (e) {
-            // Not a valid URL, proceed assuming it's an ID
-        }
+    // Regular expression to find a 32-character hexadecimal string, which is the format of a Notion database ID.
+    // It can be with or without hyphens.
+    const idMatch = urlOrId.match(/[a-fA-F0-9]{8}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{12}|[a-fA-F0-9]{32}/);
+    if (idMatch) {
+      // Return the ID with hyphens removed, which is the format the API requires.
+      return idMatch[0].replace(/-/g, '');
     }
-    // Notion database IDs are 32 characters long, but can be entered with hyphens.
-    // We remove them to get the canonical format.
-    return id.replace(/-/g, '');
+    // If no match is found, return the original input, stripped of hyphens.
+    return urlOrId.replace(/-/g, '');
 }
 
 
@@ -117,12 +106,17 @@ const syncToNotionFlow = ai.defineFlow(
         if (errorData.message) {
             errorMessage += ` Notion says: "${errorData.message}"`;
         }
+        // This is a specific, actionable error that should be shown to the user.
+        if (errorData.code === 'object_not_found') {
+             errorMessage = `Could not find a Notion database with the provided ID. Please double-check the Database ID in Settings and make sure the integration has been shared with that database.`;
+        }
         throw new Error(errorMessage);
       }
 
       return { success: true };
     } catch (err: any) {
       console.error("Error in syncToNotionFlow:", err);
+      // Pass the specific error message back to the client.
       return { success: false, error: err.message };
     }
   }
