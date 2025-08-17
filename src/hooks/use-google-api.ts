@@ -14,7 +14,7 @@ export function useGoogleApi() {
 
   useEffect(() => {
     if (!API_KEY || !CLIENT_ID || !SCOPE) {
-      console.error('Google API environment variables are not set.');
+      console.error('Google API environment variables are not set. Please create a .env.local file and add NEXT_PUBLIC_GOOGLE_API_KEY, NEXT_PUBLIC_GOOGLE_CLIENT_ID, and NEXT_PUBLIC_GOOGLE_CALENDAR_SCOPE');
       return;
     }
 
