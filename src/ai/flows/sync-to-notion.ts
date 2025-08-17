@@ -41,7 +41,7 @@ const syncToNotionFlow = ai.defineFlow(
   async (input) => {
     try {
       const notion = new Client({ auth: input.notionApiKey });
-      const databaseId = input.notionDatabaseId; // Use the ID directly
+      const databaseId = input.notionDatabaseId;
 
       // Verify database exists and integration has access
       try {
