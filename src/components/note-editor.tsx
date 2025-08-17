@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/client';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, Check, CalendarPlus, CalendarCheck, Share2 } from 'lucide-react';
+import { Loader2, Trash2, Check, CalendarPlus, Share2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Note } from '@/hooks/use-auth';
@@ -51,7 +51,7 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
 
   const { toast } = useToast();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
 
   useEffect(() => {
     setNote(initialNote);
@@ -59,10 +59,10 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
 
   useEffect(() => {
     if (isNotionDialogOpen) {
-      setNotionApiKey(localStorage.getItem('notionApiKey') || '');
-      setNotionDatabaseId(localStorage.getItem('notionDatabaseId') || '');
+      setNotionApiKey(userProfile?.notionApiKey || '');
+      setNotionDatabaseId(userProfile?.notionDatabaseId || '');
     }
-  }, [isNotionDialogOpen]);
+  }, [isNotionDialogOpen, userProfile]);
 
   const getNoteRef = useCallback(() => {
     if (!user) return null;
@@ -147,17 +147,22 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
    const handleNotionSync = async () => {
     setIsSyncing(true);
     try {
-      const apiKey = localStorage.getItem('notionApiKey');
-      const dbId = localStorage.getItem('notionDatabaseId');
+      const apiKey = userProfile?.notionApiKey;
+      const dbId = userProfile?.notionDatabaseId;
 
       if (!apiKey || !dbId) {
         setIsNotionDialogOpen(true);
         setIsSyncing(false);
         return;
       }
+      
+      const plainNote = {
+        ...note,
+        created_at: note.created_at.toDate().toISOString(),
+      };
 
       const result = await syncToNotion({
-        note,
+        note: plainNote,
         notionApiKey: apiKey,
         notionDatabaseId: dbId,
       });
@@ -165,7 +170,12 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
       if (result.success) {
         toast({
           title: 'Synced to Notion!',
-          description: 'Your task has been successfully sent to Notion.',
+          description: (
+            <p>
+                Your task has been sent to Notion. 
+                <a href={result.pageUrl} target="_blank" rel="noopener noreferrer" className="underline ml-1">View it here</a>.
+            </p>
+          ),
         });
       } else {
         toast({
@@ -185,12 +195,20 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
     }
   };
 
-  const handleSaveNotionCredentials = () => {
-    localStorage.setItem('notionApiKey', notionApiKey);
-    localStorage.setItem('notionDatabaseId', notionDatabaseId);
-    toast({ title: 'Credentials Saved', description: 'Your Notion credentials have been saved locally.' });
-    setIsNotionDialogOpen(false);
-    handleNotionSync(); // Retry syncing after saving
+  const handleSaveNotionCredentials = async () => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      await updateDoc(userRef, {
+        notionApiKey: notionApiKey,
+        notionDatabaseId: notionDatabaseId,
+      });
+      toast({ title: 'Credentials Saved', description: 'Your Notion credentials have been saved.' });
+      setIsNotionDialogOpen(false);
+      handleNotionSync(); // Retry syncing after saving
+    } catch (error: any) {
+       toast({ title: 'Error Saving Credentials', description: error.message, variant: 'destructive' });
+    }
   };
 
   return (
@@ -314,7 +332,7 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
           <DialogHeader>
             <DialogTitle>Connect to Notion</DialogTitle>
             <DialogDescription>
-              Please provide your Notion API Key and Database ID to sync your tasks. This information will be stored securely in your browser.
+              Please provide your Notion API Key and Database ID to sync your tasks. This information will be stored securely in your user profile.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -339,12 +357,12 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
               <Label htmlFor="notion-database-id">Notion Database ID</Label>
               <Input
                 id="notion-database-id"
-                placeholder="a1b2c3d4e5f6..."
+                placeholder="The 32 character ID from your database URL"
                 value={notionDatabaseId}
                 onChange={(e) => setNotionDatabaseId(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                This is the 32-character ID from your database URL. (e.g., notion.so/your-workspace/
+               <p className="text-xs text-muted-foreground">
+                This is the 32-character ID from your database URL. (e.g., notion.so/workspace/
                 <strong>a1b2c3d4e5f61234567890abcdef123456</strong>?v=...).
               </p>
             </div>
