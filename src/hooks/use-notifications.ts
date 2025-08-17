@@ -12,9 +12,12 @@ export function useNotifications(notes: Note[]) {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
-      setPermission(Notification.permission);
-      if (Notification.permission === 'default') {
+      if (Notification.permission === 'granted') {
+        setPermission('granted');
+      } else if (Notification.permission !== 'denied') {
         Notification.requestPermission().then(setPermission);
+      } else {
+        setPermission('denied');
       }
     }
   }, []);
@@ -31,19 +34,25 @@ export function useNotifications(notes: Note[]) {
           const dueDate = new Date(note.dueDate);
           const timeDiff = dueDate.getTime() - now.getTime();
           
-          // Notify if the task is due within the next minute
           if (timeDiff > 0 && timeDiff <= 60000) {
-            new Notification('Upcoming Task Reminder', {
+            const notification = new Notification('Upcoming Task Reminder', {
               body: `Your task "${note.title}" is due now.`,
-              icon: '/logo.png', // Optional: add a logo in your /public folder
+              icon: '/logo.png',
+              data: { url: `/notes/${note.id}` },
             });
+
+            notification.onclick = (event) => {
+              event.preventDefault(); // prevent the browser from focusing the Notification's tab
+              const targetUrl = (event.target as Notification).data.url;
+              window.open(targetUrl, '_blank');
+            };
+
             notifiedTaskIds.current.add(note.id);
           }
         }
       });
     };
 
-    // Check every 30 seconds
     const intervalId = setInterval(checkNotifications, 30000);
 
     return () => clearInterval(intervalId);
