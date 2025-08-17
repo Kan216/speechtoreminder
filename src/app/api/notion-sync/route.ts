@@ -3,18 +3,58 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+function extractDatabaseId(urlOrId: string): string | null {
+    if (!urlOrId) return null;
+    // Check if it's a valid UUID (32 hex characters, possibly with dashes)
+    const uuidRegex = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+    const strippedId = urlOrId.replace(/-/g, '');
+    if (strippedId.length === 32 && /^[0-9a-f]+$/i.test(strippedId)) {
+        // It's already a valid ID or a UUID with dashes
+        return urlOrId;
+    }
+
+    // Otherwise, try to extract it from a URL
+    try {
+        const url = new URL(urlOrId);
+        const pathParts = url.pathname.split('/');
+        const idPart = pathParts.find(part => part.length === 32 && /^[0-9a-f]+$/i.test(part));
+        if (idPart) {
+            return idPart;
+        }
+        // Look for ID in the last part of the path, removing query params
+        const lastPart = pathParts[pathParts.length - 1];
+        const idFromLastPart = lastPart.split('?')[0];
+         if (idFromLastPart.length === 32 && /^[0-9a-f]+$/i.test(idFromLastPart)) {
+            return idFromLastPart;
+        }
+
+    } catch (e) {
+        // Not a valid URL, but we already checked if it's an ID
+    }
+
+    return null; // Return null if no valid ID could be found
+}
+
+
 export async function POST(req: NextRequest) {
-    const { note, notionDatabaseId, notionApiKey } = await req.json();
+    const { note, notionDatabaseId: rawNotionDatabaseId, notionApiKey } = await req.json();
 
     if (!notionApiKey) {
         return NextResponse.json({ success: false, error: 'The Notion API Key is not configured. Please set it in Settings.' }, { status: 500 });
     }
-    if (!notionDatabaseId) {
+    if (!rawNotionDatabaseId) {
         return NextResponse.json({ success: false, error: 'The Notion Database ID is not configured. Please set it in Settings.' }, { status: 500 });
     }
     if (!note) {
         return NextResponse.json({ success: false, error: 'Missing note data.' }, { status: 400 });
     }
+
+    const notionDatabaseId = extractDatabaseId(rawNotionDatabaseId);
+
+    if (!notionDatabaseId) {
+        return NextResponse.json({ success: false, error: `Invalid Notion Database ID format. Please provide the 32-character ID or the full Notion URL.` }, { status: 400 });
+    }
+
 
     const pageProperties: any = {
         'Name': {

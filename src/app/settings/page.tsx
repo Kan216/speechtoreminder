@@ -88,10 +88,10 @@ export default function SettingsPage() {
                         <li>Create a new database in Notion (or use an existing one).</li>
                         <li>Share the database with your integration (click the `...` menu on the database page).</li>
                         <li>
-                            Copy the Database ID. It's the 32-character part of the URL.
+                            Copy the **Database ID**. It's the 32-character part of the URL (without dashes). You can also paste the full URL.
                             <br />
                             <code className="text-xs bg-muted p-1 rounded-sm">
-                                notion.so/your-workspace/`**`a1b2c3d4e5f61234567890abcdef123456`**`?v=...`
+                                https://www.notion.so/your-workspace/<strong className="text-primary">a1b2c3d4e5f61234567890abcdef123456</strong>?v=...
                             </code>
                         </li>
                     </ol>
@@ -108,7 +108,7 @@ export default function SettingsPage() {
                 />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="notion-database-id">Notion Database ID</Label>
+              <Label htmlFor="notion-database-id">Notion Database ID or URL</Label>
               <Input
                 id="notion-database-id"
                 placeholder="e.g., a1b2c3d4e5f61234567890abcdef123456"
