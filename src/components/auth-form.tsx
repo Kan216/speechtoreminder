@@ -8,7 +8,6 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-  getAdditionalUserInfo,
 } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,8 +16,6 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Separator } from '@/components/ui/separator'
-import { doc, setDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase/client'
 
 export function AuthForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -66,65 +63,12 @@ export function AuthForm() {
   const handleGoogleSignIn = async () => {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/calendar.events');
-    // Important: prompt and access_type are key for getting a refresh token.
-    provider.setCustomParameters({
-      access_type: 'offline',
-      prompt: 'consent' 
-    });
-
     try {
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      const user = result.user;
-      
-      if (credential && user) {
-        // This is a special property that comes back with the user object on first sign in
-        // when using prompt: 'consent' and offline access. It's not available in all
-        // environments but is the most reliable way to get the refresh token.
-        const userWithRefreshToken = user as any;
-        const refreshToken = userWithRefreshToken.refreshToken;
-
-        if (!refreshToken) {
-           console.warn("Refresh token not found. Calendar sync might not work long-term. Please try re-authenticating.");
-        }
-        
-        try {
-            const userDocRef = doc(db, 'users', user.uid, 'private', 'google');
-            const tokenData: { accessToken: string; refreshToken?: string } = {
-                accessToken: credential.accessToken!
-            };
-
-            if (refreshToken) {
-                tokenData.refreshToken = refreshToken;
-            }
-          
-            await setDoc(userDocRef, tokenData, { merge: true });
-
-        } catch (error: any) {
-            if (error.code === 'permission-denied') {
-                toast({
-                    title: 'Firestore Permission Denied',
-                    description: "Please check your security rules to allow writing to the 'private' collection for your user.",
-                    variant: 'destructive',
-                });
-            } else {
-                 toast({
-                    title: 'Error saving access token',
-                    description: error.message,
-                    variant: 'destructive',
-                });
-            }
-            setIsSubmitting(false);
-            return;
-        }
-      }
-      
+      await signInWithPopup(auth, provider);
       router.push('/notes');
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user') {
         // User just closed the popup, this is not an error to display.
-        // We can safely ignore it.
       } else {
         toast({
           title: 'Error with Google Sign-In',

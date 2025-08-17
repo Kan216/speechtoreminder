@@ -29,7 +29,6 @@ const CreateTaskFromVoiceOutputSchema = z.object({
 });
 export type CreateTaskFromVoiceOutput = z.infer<typeof CreateTaskFromVoiceOutputSchema>;
 
-// This flow no longer interacts with the calendar directly.
 export async function createTaskFromVoice(input: CreateTaskFromVoiceInput): Promise<CreateTaskFromVoiceOutput> {
   const taskDetails = await createTaskFromVoiceFlow(input);
   return taskDetails;

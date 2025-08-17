@@ -2,8 +2,6 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import VoiceRecorder from '@/components/voice-recorder';
 import { FileText, Loader2, BarChart2 } from 'lucide-react';
 import Link from 'next/link';
@@ -63,45 +61,31 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Overview</CardTitle>
-          </CardHeader>
-          <CardContent className="pl-2">
-            {notesLoading ? (
-              <div className="flex justify-center items-center h-48">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : notes.length > 0 ? (
-              <ul className="space-y-2">
-                {notes.slice(0, 5).map(note => (
-                  <li key={note.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary">
-                    <Link href={`/notes/${note.id}`} className="font-semibold hover:underline">
-                      {note.title || 'Untitled Task'}
-                    </Link>
-                    <div className="text-sm text-muted-foreground">{note.progress || 0}%</div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted-foreground text-center py-10">You have no tasks yet. Create one!</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="col-span-4 lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Calendar</CardTitle>
-            <p className="text-sm text-muted-foreground">Check your tasks for the month.</p>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Calendar
-              mode="single"
-              className="rounded-md "
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Overview</CardTitle>
+        </CardHeader>
+        <CardContent className="pl-2">
+          {notesLoading ? (
+            <div className="flex justify-center items-center h-48">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : notes.length > 0 ? (
+            <ul className="space-y-2">
+              {notes.map(note => (
+                <li key={note.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary">
+                  <Link href={`/notes/${note.id}`} className="font-semibold hover:underline">
+                    {note.title || 'Untitled Task'}
+                  </Link>
+                  <div className="text-sm text-muted-foreground">{note.progress || 0}%</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground text-center py-10">You have no tasks yet. Create one!</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -5,13 +5,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase/client';
-import { doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, Check, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Trash2, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { Note, Subtask } from '@/hooks/use-auth';
-import { Progress } from '@/components/ui/progress';
+import { Note } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -19,8 +18,6 @@ import { format } from 'date-fns';
 
 interface NoteEditorProps {
   note: Note;
-  onSyncToCalendar: () => void;
-  isSyncing: boolean;
 }
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
@@ -34,7 +31,7 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
     });
 };
 
-export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSyncing }: NoteEditorProps) {
+export default function NoteEditor({ note: initialNote }: NoteEditorProps) {
   const [note, setNote] = useState(initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -138,10 +135,6 @@ export default function NoteEditor({ note: initialNote, onSyncToCalendar, isSync
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
             {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" onClick={onSyncToCalendar}>
-                {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarIcon className="mr-2 h-4 w-4" />}
-                {note.calendarEventId ? 'Resync' : 'Sync'} Calendar
-            </Button>
             <Button variant="ghost" size="icon" onClick={handleDeleteNote} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>
