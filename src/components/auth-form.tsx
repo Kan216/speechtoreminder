@@ -67,11 +67,10 @@ export function AuthForm() {
   const handleGoogleSignIn = async () => {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
-    // Request permission to create and edit calendar events & ensure a refresh token is provided
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
     provider.setCustomParameters({
       access_type: 'offline',
-      prompt: 'consent' // This will re-prompt for consent, which is necessary to get a refresh token
+      prompt: 'consent' 
     });
 
     try {
@@ -80,21 +79,25 @@ export function AuthForm() {
       const user = result.user;
 
       if (credential && user) {
-        // Store the access token and refresh token securely on the server
         try {
-          const docData: { accessToken: string; refreshToken?: string } = {
-            accessToken: credential.accessToken!,
-          };
+            const userDocRef = doc(db, 'users', user.uid, 'private', 'google');
+            const tokenData: { accessToken: string; refreshToken?: string } = {
+                accessToken: credential.accessToken!
+            };
 
-          // The OAuth credential should contain the refresh token.
-          // Note: A refresh token is only provided on the first authorization.
-          // The `prompt: 'consent'` parameter helps ensure it's provided again.
-          const additionalUserInfo = getAdditionalUserInfo(result);
-          if (result.user.refreshToken) {
-            docData.refreshToken = result.user.refreshToken;
-          }
-
-          await setDoc(doc(db, 'users', user.uid, 'private', 'google'), docData, { merge: true });
+            // This is the correct way to get the refresh token with the v9 SDK
+            // The refresh token is often part of the user object itself on the first sign-in
+            if (user.refreshToken) {
+                tokenData.refreshToken = user.refreshToken;
+            } else {
+                 const additionalUserInfo = getAdditionalUserInfo(result);
+                 // Fallback for some environments
+                 if (additionalUserInfo?.profile?.refresh_token) {
+                    tokenData.refreshToken = additionalUserInfo.profile.refresh_token;
+                 }
+            }
+          
+            await setDoc(userDocRef, tokenData, { merge: true });
 
         } catch (error: any) {
             if (error.code === 'permission-denied') {
@@ -117,6 +120,11 @@ export function AuthForm() {
       
       router.push('/notes');
     } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        // This is not a "real" error, user just closed the popup.
+        // We can safely ignore it and don't need to show a scary error message.
+        return;
+      }
       toast({
         title: 'Error with Google Sign-In',
         description: error.message,
