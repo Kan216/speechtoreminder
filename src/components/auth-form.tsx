@@ -33,7 +33,7 @@ export function AuthForm() {
     } catch (error: any) {
       toast({
         title: 'Error signing in',
-        description: error.message,
+        description: 'Invalid credentials. Please check your email and password.',
         variant: 'destructive',
       })
     } finally {
@@ -46,8 +46,8 @@ export function AuthForm() {
     try {
       await createUserWithEmailAndPassword(auth, email, password)
        toast({
-        title: 'Success!',
-        description: 'You have signed up successfully. Please sign in.',
+        title: 'Account Created!',
+        description: 'You have signed up successfully. Please sign in to continue.',
       })
     } catch (error: any) {
       toast({
