@@ -12,12 +12,13 @@ import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal } from 'lucide-react';
+import { Terminal, KeyRound } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, userProfile, loading } = useAuth();
   const [notionApiKey, setNotionApiKey] = useState('');
   const [notionDatabaseId, setNotionDatabaseId] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -25,6 +26,7 @@ export default function SettingsPage() {
     if (userProfile) {
       setNotionApiKey(userProfile.notionApiKey || '');
       setNotionDatabaseId(userProfile.notionDatabaseId || '');
+      setGeminiApiKey(userProfile.geminiApiKey || '');
     }
   }, [userProfile]);
   
@@ -41,10 +43,6 @@ export default function SettingsPage() {
         toast({ title: 'You must be logged in', variant: 'destructive'});
         return;
     }
-    if (!notionApiKey || !notionDatabaseId) {
-        toast({ title: 'All fields are required', description: 'Please provide both a Notion API Key and a Database ID.', variant: 'destructive'});
-        return;
-    }
 
     setIsSaving(true);
     try {
@@ -52,8 +50,9 @@ export default function SettingsPage() {
         await updateDoc(userRef, {
             notionApiKey: notionApiKey.trim(),
             notionDatabaseId: notionDatabaseId.trim(),
+            geminiApiKey: geminiApiKey.trim(),
         });
-        toast({ title: 'Settings saved!', description: 'Your Notion credentials have been updated.'});
+        toast({ title: 'Settings saved!', description: 'Your credentials have been updated.'});
     } catch(error: any) {
         toast({ title: 'Error saving settings', description: error.message, variant: 'destructive'});
     } finally {
@@ -69,11 +68,49 @@ export default function SettingsPage() {
           <p className="text-muted-foreground">Manage your app preferences and integrations.</p>
         </div>
       </div>
+
+       <Card>
+        <CardHeader>
+          <CardTitle>API Keys</CardTitle>
+          <CardDescription>
+            Provide your own API keys for the services used in this application. Your credentials are saved securely to your user profile.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+            <div className="space-y-2">
+                <Label htmlFor="gemini-api-key">Gemini API Key</Label>
+                 <div className="flex items-center gap-2">
+                    <KeyRound className="h-5 w-5 text-muted-foreground" />
+                    <Input
+                        id="gemini-api-key"
+                        type="password"
+                        placeholder="Enter your Google AI Studio API Key"
+                        value={geminiApiKey}
+                        onChange={(e) => setGeminiApiKey(e.target.value)}
+                    />
+                </div>
+                 <p className="text-xs text-muted-foreground">
+                    Get your key from {' '}
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+                        Google AI Studio
+                    </a>.
+                </p>
+            </div>
+             <div>
+                 <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                    Save API Keys
+                </Button>
+            </div>
+        </CardContent>
+      </Card>
+
+
       <Card>
         <CardHeader>
           <CardTitle>Notion Integration</CardTitle>
           <CardDescription>
-            Connect your Notion account to seamlessly sync your tasks. Your credentials are saved securely to your user profile.
+            Connect your Notion account to seamlessly sync your tasks.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

@@ -25,7 +25,7 @@ export default function VoiceRecorder() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
 
@@ -36,6 +36,16 @@ export default function VoiceRecorder() {
                 description: 'You must be signed in to record a voice note.',
                 variant: 'destructive',
             });
+            return;
+        }
+
+        if (!userProfile?.geminiApiKey) {
+            toast({
+                title: 'Gemini API Key Required',
+                description: 'Please set your Gemini API key in Settings to use voice notes.',
+                variant: 'destructive',
+            });
+            router.push('/settings');
             return;
         }
 
@@ -88,7 +98,7 @@ export default function VoiceRecorder() {
         setIsRecording(false);
         setIsTranscribing(true);
 
-        if (audioChunksRef.current.length === 0 || !user) {
+        if (audioChunksRef.current.length === 0 || !user || !userProfile?.geminiApiKey) {
             setIsTranscribing(false);
             setIsDialogOpen(false);
             return;
@@ -105,6 +115,7 @@ export default function VoiceRecorder() {
                 const { taskTitle, subtasks } = await createTaskFromVoice({ 
                     audioDataUri: base64Audio,
                     userId: user.uid,
+                    apiKey: userProfile.geminiApiKey!,
                 });
                 
                 const subtasksWithIds = subtasks.map(subtask => ({

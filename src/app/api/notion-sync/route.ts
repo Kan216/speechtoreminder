@@ -38,10 +38,13 @@ function extractDatabaseId(urlOrId: string): string | null {
 
 
 export async function POST(req: NextRequest) {
-    const { note, notionDatabaseId: rawNotionDatabaseId, notionApiKey } = await req.json();
+    const { note, notionDatabaseId: rawNotionDatabaseId, notionApiKey, geminiApiKey } = await req.json();
 
     if (!notionApiKey) {
         return NextResponse.json({ success: false, error: 'The Notion API Key is not configured. Please set it in Settings.' }, { status: 500 });
+    }
+     if (!geminiApiKey) {
+        return NextResponse.json({ success: false, error: 'The Gemini API Key is not configured. Please set it in Settings.' }, { status: 500 });
     }
     if (!rawNotionDatabaseId) {
         return NextResponse.json({ success: false, error: 'The Notion Database ID is not configured. Please set it in Settings.' }, { status: 500 });
@@ -60,6 +63,7 @@ export async function POST(req: NextRequest) {
         const { formattedTitle, reminderDate, reminderTime } = await formatNoteForNotion({
             title: note.title,
             subtasks: note.subtasks.map((s: any) => s.text),
+            apiKey: geminiApiKey,
         });
 
         const effectiveTitle = formattedTitle || note.title || 'Untitled Task';

@@ -127,12 +127,23 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
     setIsSyncing(true);
     try {
       const dbId = userProfile?.notionDatabaseId;
-      const apiKey = userProfile?.notionApiKey;
+      const notionKey = userProfile?.notionApiKey;
+      const geminiKey = userProfile?.geminiApiKey;
 
-      if (!dbId || !apiKey) {
+      if (!dbId || !notionKey) {
         toast({
             title: 'Notion Not Configured',
             description: 'Please go to Settings to save your Notion API Key and Database ID.',
+            variant: 'destructive',
+        });
+        router.push('/settings');
+        setIsSyncing(false);
+        return;
+      }
+       if (!geminiKey) {
+        toast({
+            title: 'Gemini API Key Required',
+            description: 'Please set your Gemini API key in Settings to use this feature.',
             variant: 'destructive',
         });
         router.push('/settings');
@@ -153,7 +164,8 @@ export default function NoteEditor({ note: initialNote }: {note: Note}) {
         body: JSON.stringify({
           note: plainNote,
           notionDatabaseId: dbId,
-          notionApiKey: apiKey,
+          notionApiKey: notionKey,
+          geminiApiKey: geminiKey,
         }),
       });
 

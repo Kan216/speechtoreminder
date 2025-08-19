@@ -29,6 +29,7 @@ export interface UserProfile {
     photoURL?: string | null;
     notionApiKey?: string;
     notionDatabaseId?: string;
+    geminiApiKey?: string;
 }
 
 type AuthContextType = {
