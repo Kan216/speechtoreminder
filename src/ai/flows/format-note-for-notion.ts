@@ -45,7 +45,9 @@ const prompt = ai.definePrompt({
 
   Instructions:
   1.  **Refine the Title**: Based on the title and subtasks, create a clearer, more actionable title. For example, if the title is "meeting" and a subtask is "discuss budget", a good title would be "Meeting to Discuss Budget".
-  2.  **Extract Reminder Date & Time**: Analyze the title and subtasks for any mention of a date or time (e.g., "tomorrow at 3pm", "August 25th", "next Friday"). Convert this into a precise ISO 8601 format (e.g., YYYY-MM-DDTHH:mm:ss.sssZ). If no specific date or time is mentioned, return null for the reminderDateTime.
+  2.  **Extract Reminder Date & Time**: Analyze the title and subtasks for any mention of a date or time (e.g., "tomorrow at 3pm", "August 25th", "next Friday"). Convert this into a precise ISO 8601 format (e.g., YYYY-MM-DDTHH:mm:ss.sssZ). 
+  
+  IMPORTANT: When a time is mentioned (e.g., "3pm"), assume it is in the user's local time. Do NOT convert it to UTC. For example, if a user says '3pm', the time portion of the ISO string should be 'T15:00:00'. If no specific date or time is mentioned, return null for the reminderDateTime.
   
   Please provide the refined title and the extracted date/time.
   `,
