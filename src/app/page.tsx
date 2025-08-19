@@ -1,5 +1,6 @@
-import { redirect } from 'next/navigation';
+import NotesPage from "./notes/page";
 
-export default async function Home() {
-    redirect('/notes');
+export default function Home() {
+  return <NotesPage />;
 }
+
