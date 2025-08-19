@@ -3,11 +3,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, StopCircle, Loader2 } from 'lucide-react';
+import { Mic, StopCircle, Loader2, Star } from 'lucide-react';
 import { createTaskFromVoice } from '@/ai/flows/create-task-from-voice';
 import { useAuth } from '@/hooks/use-auth';
 import { db } from '@/lib/firebase/client';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, increment, Timestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,17 +17,51 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
+    DialogFooter
 } from "@/components/ui/dialog"
+
+const FREE_TIER_DAILY_LIMIT = 2;
 
 export default function VoiceRecorder() {
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const { user, userProfile } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
+
+    const handleCreditCheck = async () => {
+        if (!user || !userProfile) return false;
+
+        const { subscriptionTier, lastCreditReset, dailyVoiceCreditsUsed } = userProfile;
+        
+        if (subscriptionTier === 'premium') {
+            return true;
+        }
+
+        const today = new Date();
+        const lastResetDate = (lastCreditReset as Timestamp)?.toDate();
+
+        const isNewDay = lastResetDate.toDateString() !== today.toDateString();
+
+        if (isNewDay) {
+            await updateDoc(doc(db, 'users', user.uid), {
+                dailyVoiceCreditsUsed: 0,
+                lastCreditReset: Timestamp.now()
+            });
+            return true;
+        }
+
+        if (dailyVoiceCreditsUsed >= FREE_TIER_DAILY_LIMIT) {
+            setShowUpgradeDialog(true);
+            return false;
+        }
+
+        return true;
+    }
 
     const startRecording = async () => {
         if (!user) {
@@ -38,7 +72,7 @@ export default function VoiceRecorder() {
             });
             return;
         }
-
+        
         if (!userProfile?.geminiApiKey) {
             toast({
                 title: 'Gemini API Key Required',
@@ -48,7 +82,14 @@ export default function VoiceRecorder() {
             router.push('/settings');
             return;
         }
+        
+        const hasCredits = await handleCreditCheck();
+        if (!hasCredits) {
+             setIsDialogOpen(false);
+             return;
+        }
 
+        setIsDialogOpen(true);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -81,15 +122,6 @@ export default function VoiceRecorder() {
     const stopRecording = () => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop();
-        }
-    };
-
-    const handleRecordingToggle = () => {
-        if (isRecording) {
-            stopRecording();
-        } else {
-            setIsDialogOpen(true);
-            startRecording();
         }
     };
 
@@ -132,6 +164,12 @@ export default function VoiceRecorder() {
                     user_id: user.uid,
                     created_at: serverTimestamp(),
                 });
+                
+                if (userProfile.subscriptionTier === 'free') {
+                    await updateDoc(doc(db, 'users', user.uid), {
+                        dailyVoiceCreditsUsed: increment(1)
+                    });
+                }
 
                 toast({
                     title: 'Task Created!',
@@ -155,9 +193,13 @@ export default function VoiceRecorder() {
 
     const handleCancel = () => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            const stream = mediaRecorderRef.current.stream;
             mediaRecorderRef.current.stop();
+            stream.getTracks().forEach(track => track.stop());
+            setIsRecording(false);
         }
         setIsDialogOpen(false);
+        setIsTranscribing(false);
     }
     
     useEffect(() => {
@@ -170,7 +212,7 @@ export default function VoiceRecorder() {
 
     return (
         <>
-            <Button onClick={handleRecordingToggle}>
+            <Button onClick={startRecording}>
                 <Mic className="mr-2 h-4 w-4" />
                 Create with Voice
             </Button>
@@ -193,6 +235,32 @@ export default function VoiceRecorder() {
                      <Button onClick={stopRecording} disabled={!isRecording} variant="destructive">
                         <StopCircle className="mr-2 h-4 w-4" /> Stop Recording
                     </Button>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="text-center text-2xl">Daily Limit Reached</DialogTitle>
+                        <DialogDescription className="text-center">
+                            You've used all your free voice credits for today.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                            <Star className="h-8 w-8 text-primary" />
+                        </div>
+                        <p className="text-center text-muted-foreground">Upgrade to Premium for unlimited voice notes, plus other exclusive features!</p>
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setShowUpgradeDialog(false)} variant="ghost">Maybe Later</Button>
+                        <Button onClick={() => {
+                            toast({ title: "Coming Soon!", description: "The premium plan is not yet available."});
+                            setShowUpgradeDialog(false);
+                        }}>
+                           <Star className="mr-2 h-4 w-4"/> Upgrade to Premium
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </>

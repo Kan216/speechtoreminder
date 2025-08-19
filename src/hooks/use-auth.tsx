@@ -30,6 +30,9 @@ export interface UserProfile {
     notionApiKey?: string;
     notionDatabaseId?: string;
     geminiApiKey?: string;
+    subscriptionTier: 'free' | 'premium';
+    dailyVoiceCreditsUsed: number;
+    lastCreditReset: Timestamp;
 }
 
 type AuthContextType = {
@@ -74,6 +77,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     email: user.email,
                     displayName: user.displayName,
                     photoURL: user.photoURL,
+                    subscriptionTier: 'free',
+                    dailyVoiceCreditsUsed: 0,
+                    lastCreditReset: Timestamp.now(),
                 };
                 setDoc(userRef, { ...newUserProfile, createdAt: serverTimestamp() });
             }
