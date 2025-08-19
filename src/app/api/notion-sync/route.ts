@@ -2,6 +2,7 @@
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { formatNoteForNotion } from '@/ai/flows/format-note-for-notion';
 
 function extractDatabaseId(urlOrId: string): string | null {
     if (!urlOrId) return null;
@@ -10,7 +11,7 @@ function extractDatabaseId(urlOrId: string): string | null {
     const strippedId = urlOrId.replace(/-/g, '');
     if (strippedId.length === 32 && /^[0-9a-f]+$/i.test(strippedId)) {
         // It's already a valid ID or a UUID with dashes
-        return urlOrId;
+        return urlOrId.replace(/-/g, '');
     }
 
     // Otherwise, try to extract it from a URL
@@ -55,36 +56,49 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: `Invalid Notion Database ID format. Please provide the 32-character ID or the full Notion URL.` }, { status: 400 });
     }
 
-
-    const pageProperties: any = {
-        'Name': {
-            title: [
-                {
-                    text: { content: note.title || 'Untitled Task' },
-                },
-            ],
-        },
-        'Status': {
-            status: { name: note.status || 'pending' },
-        },
-    };
-
-    if (note.dueDate) {
-        pageProperties['Due Date'] = {
-            date: { start: new Date(note.dueDate).toISOString().split('T')[0] },
-        };
-    }
-
-    const pageChildren = note.subtasks?.map((subtask: any) => ({
-        object: 'block' as const,
-        type: 'to_do' as const,
-        to_do: {
-            rich_text: [{ type: 'text' as const, text: { content: subtask.text } }],
-            checked: subtask.completed,
-        },
-    }));
-
     try {
+        const { formattedTitle, reminderDateTime } = await formatNoteForNotion({
+            title: note.title,
+            subtasks: note.subtasks.map((s: any) => s.text),
+        });
+
+        const effectiveTitle = formattedTitle || note.title || 'Untitled Task';
+        
+        let effectiveDueDate = note.dueDate ? new Date(note.dueDate) : null;
+        if (reminderDateTime) {
+            effectiveDueDate = new Date(reminderDateTime);
+        }
+
+        const pageProperties: any = {
+            'Name': {
+                title: [
+                    {
+                        text: { content: effectiveTitle },
+                    },
+                ],
+            },
+            'Status': {
+                status: { name: note.status || 'pending' },
+            },
+        };
+
+        if (effectiveDueDate) {
+             pageProperties['Due Date'] = {
+                date: { 
+                    start: effectiveDueDate.toISOString(),
+                },
+            };
+        }
+
+        const pageChildren = note.subtasks?.map((subtask: any) => ({
+            object: 'block' as const,
+            type: 'to_do' as const,
+            to_do: {
+                rich_text: [{ type: 'text' as const, text: { content: subtask.text } }],
+                checked: subtask.completed,
+            },
+        }));
+
         const response = await fetch("https://api.notion.com/v1/pages", {
             method: "POST",
             headers: {
