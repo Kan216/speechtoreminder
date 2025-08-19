@@ -19,7 +19,8 @@ export type FormatNoteForNotionInput = z.infer<typeof FormatNoteForNotionInputSc
 
 const FormatNoteForNotionOutputSchema = z.object({
   formattedTitle: z.string().describe('A new, clearer, more actionable title for the task.'),
-  reminderDateTime: z.string().nullable().describe('The extracted reminder date and time in ISO 8601 format (e.g., 2024-08-20T14:00:00.000Z), or null if none is found.'),
+  reminderDate: z.string().nullable().describe("The extracted reminder date in 'YYYY-MM-DD' format, or null if not found."),
+  reminderTime: z.string().nullable().describe("The extracted reminder time in 24-hour 'HH:mm' format, or null if not found."),
 });
 export type FormatNoteForNotionOutput = z.infer<typeof FormatNoteForNotionOutputSchema>;
 
@@ -34,7 +35,7 @@ const prompt = ai.definePrompt({
   prompt: `You are an intelligent assistant that helps format tasks for Notion.
   Your goal is to refine a task and extract a specific reminder date and time from its details.
 
-  Current Date for reference: ${new Date().toISOString()}
+  Current Date for reference: ${new Date().toISOString().split('T')[0]}
 
   Task Details:
   Title: {{{title}}}
@@ -45,11 +46,12 @@ const prompt = ai.definePrompt({
 
   Instructions:
   1.  **Refine the Title**: Based on the title and subtasks, create a clearer, more actionable title. For example, if the title is "meeting" and a subtask is "discuss budget", a good title would be "Meeting to Discuss Budget".
-  2.  **Extract Reminder Date & Time**: Analyze the title and subtasks for any mention of a date or time (e.g., "tomorrow at 3pm", "August 25th", "next Friday"). Convert this into a precise ISO 8601 format (e.g., YYYY-MM-DDTHH:mm:ss.sssZ). 
+  2.  **Extract Date**: Analyze the title and subtasks for any mention of a date (e.g., "tomorrow", "August 25th", "next Friday"). Convert this into a precise 'YYYY-MM-DD' format.
+  3.  **Extract Time**: Analyze the title and subtasks for any mention of a time (e.g., "3pm", "14:00"). Convert this into a 24-hour 'HH:mm' format.
   
-  IMPORTANT: When a time is mentioned (e.g., "3pm"), assume it is in the user's local time. Do NOT convert it to UTC. For example, if a user says '3pm', the time portion of the ISO string should be 'T15:00:00'. If no specific date or time is mentioned, return null for the reminderDateTime.
-  
-  Please provide the refined title and the extracted date/time.
+  IMPORTANT: The time should be extracted as is, without any timezone conversion. If a user says "3pm", the output for reminderTime should be "15:00".
+
+  If no specific date or time is mentioned, return null for the respective fields.
   `,
 });
 

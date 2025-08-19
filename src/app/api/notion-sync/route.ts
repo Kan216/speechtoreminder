@@ -57,17 +57,26 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const { formattedTitle, reminderDateTime } = await formatNoteForNotion({
+        const { formattedTitle, reminderDate, reminderTime } = await formatNoteForNotion({
             title: note.title,
             subtasks: note.subtasks.map((s: any) => s.text),
         });
 
         const effectiveTitle = formattedTitle || note.title || 'Untitled Task';
         
-        let effectiveDueDate = note.dueDate ? new Date(note.dueDate) : null;
-        if (reminderDateTime) {
-            effectiveDueDate = new Date(reminderDateTime);
+        let effectiveDueDate = null;
+        if (reminderDate) {
+            if (reminderTime) {
+                // If we have date and time, combine them into a timezone-free ISO string
+                effectiveDueDate = `${reminderDate}T${reminderTime}:00`;
+            } else {
+                // If we only have a date, use that
+                effectiveDueDate = reminderDate;
+            }
+        } else if (note.dueDate) {
+             effectiveDueDate = new Date(note.dueDate).toISOString().split('T')[0];
         }
+
 
         const pageProperties: any = {
             'Name': {
@@ -85,7 +94,7 @@ export async function POST(req: NextRequest) {
         if (effectiveDueDate) {
              pageProperties['Due Date'] = {
                 date: { 
-                    start: effectiveDueDate.toISOString(),
+                    start: effectiveDueDate,
                 },
             };
         }
