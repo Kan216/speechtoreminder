@@ -1,3 +1,4 @@
+
 'use client';
 
 import MainSidebar from '@/components/main-sidebar';
@@ -17,7 +18,7 @@ export default function NotesLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading, notes, notesLoading, notesError } = useAuth();
+  const { user, userProfile, loading, notes, notesLoading, notesError } = useAuth();
 
   if (loading) {
     return (
@@ -30,6 +31,11 @@ export default function NotesLayout({
   if (!user) {
      redirect('/auth');
      return null;
+  }
+
+  if (userProfile?.status === 'pending') {
+    redirect('/pending');
+    return null;
   }
 
   return (

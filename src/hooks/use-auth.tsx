@@ -5,6 +5,7 @@ import { useState, useEffect, createContext, useContext, ReactNode } from 'react
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
 import { collection, query, orderBy, onSnapshot, Timestamp, doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { redirect, usePathname } from 'next/navigation';
 
 export interface Subtask {
   id: string;
@@ -33,6 +34,7 @@ export interface UserProfile {
     subscriptionTier: 'free' | 'premium';
     dailyVoiceCreditsUsed: number;
     lastCreditReset: Timestamp;
+    status: 'pending' | 'approved';
 }
 
 type AuthContextType = {
@@ -60,17 +62,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesLoading, setNotesLoading] = useState(true);
   const [notesError, setNotesError] = useState<string | null>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      
       if (user) {
         setUser(user);
-        
         const userRef = doc(db, 'users', user.uid);
+        
         const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
-                setUserProfile(docSnap.data() as UserProfile);
+                const profileData = docSnap.data() as UserProfile;
+                setUserProfile(profileData);
+
+                if (profileData.status === 'pending' && pathname !== '/pending') {
+                  redirect('/pending');
+                }
+
             } else {
                 const newUserProfile: UserProfile = {
                     uid: user.uid,
@@ -80,41 +88,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     subscriptionTier: 'free',
                     dailyVoiceCreditsUsed: 0,
                     lastCreditReset: Timestamp.now(),
+                    status: 'pending', // Default status for new users
                 };
                 setDoc(userRef, { ...newUserProfile, createdAt: serverTimestamp() });
             }
         });
 
-        setNotesLoading(true);
-        const q = query(
-          collection(db, 'users', user.uid, 'notes'),
-          orderBy('created_at', 'desc')
-        );
+        const profileData = (await getDoc(userRef)).data() as UserProfile | undefined;
 
-        const unsubscribeNotes = onSnapshot(q, (querySnapshot) => {
-          const notesData = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Note[];
-          setNotes(notesData);
-          setNotesLoading(false);
-          setNotesError(null);
-        },
-        (error) => {
-          console.error("Error fetching notes:", error);
-          if(error.code === 'permission-denied') {
-              setNotesError("Permission Denied: Please check your Firestore security rules to allow listing notes.");
-          } else {
-              setNotesError(error.message);
-          }
-          setNotesLoading(false);
-        });
-        
-        setLoading(false);
+        if (profileData?.status === 'approved') {
+            setNotesLoading(true);
+            const q = query(
+              collection(db, 'users', user.uid, 'notes'),
+              orderBy('created_at', 'desc')
+            );
 
-        return () => {
-            unsubscribeProfile();
-            unsubscribeNotes();
+            const unsubscribeNotes = onSnapshot(q, (querySnapshot) => {
+              const notesData = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+              })) as Note[];
+              setNotes(notesData);
+              setNotesLoading(false);
+              setNotesError(null);
+            },
+            (error) => {
+              console.error("Error fetching notes:", error);
+              if(error.code === 'permission-denied') {
+                  setNotesError("Permission Denied: Please check your Firestore security rules to allow listing notes.");
+              } else {
+                  setNotesError(error.message);
+              }
+              setNotesLoading(false);
+            });
+
+             setLoading(false);
+             return () => {
+                unsubscribeProfile();
+                unsubscribeNotes();
+            }
+        } else {
+            setNotes([]);
+            setNotesLoading(false);
+            setLoading(false);
+            return () => {
+                unsubscribeProfile();
+            }
         }
       } else {
         setUser(null);
